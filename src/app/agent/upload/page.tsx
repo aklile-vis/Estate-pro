@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import {
   ArrowUpOnSquareIcon,
@@ -11,10 +11,13 @@ import {
   PlayCircleIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { processCAD, uploadDesignFile } from '@/lib/backendClient'
+import { SUPPORTED_CURRENCIES } from '@/lib/utils'
+import { PhotoIcon, FilmIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+
 
 interface UploadSummary {
   fileId: string
@@ -84,6 +87,8 @@ export default function AgentUploadPage() {
   const [fileKind, setFileKind] = useState<UploadCategory | null>(null)
   const { token, user, isAuthenticated } = useAuth()
   const isAgent = user?.role === 'AGENT' || user?.role === 'ADMIN'
+  const [media, setMedia] = useState<MediaItem[]>([])
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const aiRooms = useMemo<AIRoom[]>(() => {
     if (!Array.isArray(aiInsights?.rooms)) return []
@@ -259,8 +264,507 @@ export default function AgentUploadPage() {
     }
   }, [isAgent, isAuthenticated, token, topologyPath, user?.id])
 
+  // from publish page, trimmed for Section 1
+  type ListingFormState = {
+    title: string
+    basePrice: string
+    description: string
+    address: string
+    city: string
+    bedrooms: string
+    bathrooms: string
+    areaSqm: string
+    currency: string
+  }
+
+  const DEFAULT_FORM: ListingFormState = {
+    title: '',
+    basePrice: '',
+    description: '',
+    address: '',
+    city: '',
+    bedrooms: '',
+    bathrooms: '',
+    areaSqm: '',
+    currency: 'ETB',
+  }
+
+  type MediaItem = {
+    file: File
+    url: string
+    kind: 'image' | 'video'
+  }
+
+  const [form, setForm] = useState<ListingFormState>(DEFAULT_FORM)
+
+  const handleChange = (field: keyof ListingFormState) => (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    setForm((prev) => ({ ...prev, [field]: event.target.value }))
+  }
+  
+  const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value.toUpperCase()
+    setForm((prev) => ({ ...prev, currency: value }))
+  }
+  
+  // Images
+  type ImageItem = { file: File; url: string }
+  const [images, setImages] = useState<ImageItem[]>([])
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+
+  const addImages = (files: FileList | File[]) => {
+    const items = Array.from(files)
+      .filter(f => f.type.startsWith('image/'))
+      .map(file => ({ file, url: URL.createObjectURL(file) }))
+    setImages(prev => [...prev, ...items])
+  }
+  const removeImageAt = (idx: number) => {
+    setImages(prev => {
+      const copy = [...prev]
+      const [removed] = copy.splice(idx, 1)
+      if (removed) URL.revokeObjectURL(removed.url)
+      return copy
+    })
+  }
+
+  // Videos
+  type VideoItem = { file: File; url: string }
+  const [videos, setVideos] = useState<VideoItem[]>([])
+  const videoInputRef = useRef<HTMLInputElement | null>(null)
+
+  const addVideos = (files: FileList | File[]) => {
+    const items = Array.from(files)
+      .filter(f => f.type.startsWith('video/'))
+      .map(file => ({ file, url: URL.createObjectURL(file) }))
+    setVideos(prev => [...prev, ...items])
+  }
+  const removeVideoAt = (idx: number) => {
+    setVideos(prev => {
+      const copy = [...prev]
+      const [removed] = copy.splice(idx, 1)
+      if (removed) URL.revokeObjectURL(removed.url)
+      return copy
+    })
+  }
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      images.forEach(m => URL.revokeObjectURL(m.url))
+      videos.forEach(v => URL.revokeObjectURL(v.url))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const RESIDENTIAL_TYPES = [
+    'Apartment',
+    'Townhouse',
+    'Villa Compound',
+    'Land',
+    'Building',
+    'Villa',
+    'Penthouse',
+    'Hotel Apartment',
+    'Floor',
+  ] as const
+
+  const COMMERCIAL_TYPES = [
+    'Office',
+    'Shop',
+    'Warehouse',
+    'Labour Camp',
+    'Bulk Unit',
+    'Floor',
+    'Building',
+    'Factory',
+    'Industrial Land',
+    'Mixed Use Land',
+    'Showroom',
+    'Other Commercial',
+  ] as const
+
+  type PropertyCategory = 'Residential' | 'Commercial'
+
+  const [propTypeOpen, setPropTypeOpen] = useState(false)
+  const [propTab, setPropTab] = useState<PropertyCategory>('Residential')
+  const [propertyType, setPropertyType] = useState<string>('') // selected value (one of arrays above)
+  const propRef = useRef<HTMLDivElement | null>(null)
+
+  // close on outside click
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!propRef.current) return
+      if (!propRef.current.contains(e.target as Node)) setPropTypeOpen(false)
+    }
+    if (propTypeOpen) document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [propTypeOpen])
+
+
+
   return (
     <div className="min-h-screen bg-[color:var(--app-background)] text-primary">
+      {/* Section 1: Traditional Details (from publish page styles) */}
+      <div className="container space-y-8 py-8">
+        <header className="space-y-3 text-center">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">
+            <DocumentTextIcon className="h-4 w-4" /> Listing details → traditional form
+          </div>
+          <h2 className="headline text-3xl">Enter property information</h2>
+          <p className="mx-auto max-w-2xl text-sm text-muted">
+            Provide the essential details of this property — title, description, address, rooms, and pricing.
+          </p>
+        </header>
+
+        <section className="surface-soft space-y-6 p-8 rounded-2xl border border-[color:var(--surface-border)]">
+          {/* Title + Price/Currency */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Listing title</span>
+              <input
+                required
+                value={form.title}
+                onChange={handleChange('title')}
+                className="input h-11"
+                placeholder="Luxury smart condo"
+              />
+            </label>
+
+            <div className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Base price</span>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.basePrice}
+                  onChange={handleChange('basePrice')}
+                  className="input h-11"
+                  placeholder="850000"
+                />
+                <select
+                  value={form.currency}
+                  onChange={handleCurrencyChange}
+                  className="input h-11"
+                >
+                  {SUPPORTED_CURRENCIES.map((code) => (
+                    <option key={code} value={code}>{code}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <label className="space-y-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted">Headline description</span>
+            <textarea
+              rows={3}
+              value={form.description}
+              onChange={handleChange('description')}
+              className="input min-h-[96px]"
+              placeholder="Highlight key selling points, finishes, and amenities"
+            />
+          </label>
+
+          {/* Address / City */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Street address</span>
+              <input
+                value={form.address}
+                onChange={handleChange('address')}
+                className="input h-11"
+                placeholder="123 Palm Avenue"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">City / region</span>
+              <input
+                value={form.city}
+                onChange={handleChange('city')}
+                className="input h-11"
+                placeholder="Addis Ababa"
+              />
+            </label>
+          </div>
+          {/* Property Type (dropdown with Residential/Commercial tabs) */}
+          <div className="space-y-1">
+            <span className="text-[11px] uppercase tracking-wide text-muted">Property type</span>
+
+            <div className="relative" ref={propRef}>
+              {/* Field button */}
+              <button
+                type="button"
+                onClick={() => setPropTypeOpen((o) => !o)}
+                className="input h-11 w-full flex items-center justify-between"
+                aria-haspopup="listbox"
+                aria-expanded={propTypeOpen}
+              >
+                <span className={propertyType ? 'text-primary' : 'text-disabled'}>
+                  {propertyType || 'Select property type'}
+                </span>
+                <ChevronDownIcon className="h-5 w-5 text-muted" />
+              </button>
+
+              {/* Dropdown */}
+              {propTypeOpen && (
+                <div
+                  className="absolute z-50 mt-2 w-full rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[0_18px_40px_rgba(0,0,0,0.15)]"
+                  role="dialog"
+                >
+                  {/* Tabs header */}
+                  <div className="flex items-center justify-between px-4 pt-3">
+                    <div className="flex w-full gap-8">
+                      <button
+                        type="button"
+                        onClick={() => setPropTab('Residential')}
+                        className={`pb-2 text-sm font-semibold ${
+                          propTab === 'Residential' ? 'text-[color:var(--accent-500)]' : 'text-secondary'
+                        }`}
+                      >
+                        Residential
+                        <div
+                          className={`mt-2 h-[2px] ${
+                            propTab === 'Residential' ? 'bg-[color:var(--accent-500)]' : 'bg-transparent'
+                          }`}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPropTab('Commercial')}
+                        className={`pb-2 text-sm font-semibold ${
+                          propTab === 'Commercial' ? 'text-[color:var(--accent-500)]' : 'text-secondary'
+                        }`}
+                      >
+                        Commercial
+                        <div
+                          className={`mt-2 h-[2px] ${
+                            propTab === 'Commercial' ? 'bg-[color:var(--accent-500)]' : 'bg-transparent'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mx-4 mt-2 h-px bg-[color:var(--surface-border)]/80" />
+
+                  {/* Options grid */}
+                  <div className="max-h-[360px] overflow-auto p-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {(propTab === 'Residential' ? RESIDENTIAL_TYPES : COMMERCIAL_TYPES).map((label) => {
+                        const selected = propertyType === label
+                        return (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => {
+                              setPropertyType(label)
+                              setPropTypeOpen(false)
+                            }}
+                            className={`flex w-full items-center justify-between rounded-full border px-4 py-3 text-sm transition ${
+                              selected
+                                ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]/10 text-primary'
+                                : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-2)]'
+                            }`}
+                          >
+                            <span className="truncate">{label}</span>
+                            <span
+                              className={`ml-3 inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                                selected
+                                  ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]'
+                                  : 'border-[color:var(--surface-border)] bg-transparent'
+                              }`}
+                            >
+                              <span className={`h-2.5 w-2.5 rounded-full ${selected ? 'bg-white' : 'bg-transparent'}`} />
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Footer actions (optional: Reset / Done) */}
+                  <div className="flex items-center justify-between gap-3 border-t border-[color:var(--surface-border)] px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setPropertyType('')}
+                      className="btn btn-ghost"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPropTypeOpen(false)}
+                      className="btn btn-primary"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bedrooms / Bathrooms / Area */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Bedrooms</span>
+              <input
+                type="number"
+                min="0"
+                value={form.bedrooms}
+                onChange={handleChange('bedrooms')}
+                className="input h-11"
+                placeholder="3"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Bathrooms</span>
+              <input
+                type="number"
+                min="0"
+                value={form.bathrooms}
+                onChange={handleChange('bathrooms')}
+                className="input h-11"
+                placeholder="2"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Area (sqm)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={form.areaSqm}
+                onChange={handleChange('areaSqm')}
+                className="input h-11"
+                placeholder="120"
+              />
+            </label>
+          </div>
+        </section>
+      </div>
+
+      {/* Section: Media (Images & Videos inside one form) */}
+      <div className="container space-y-8 py-8">
+        <header className="space-y-3 text-center">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">
+            <PhotoIcon className="h-4 w-4" /> Media → images & videos
+          </div>
+          <h2 className="headline text-3xl">Add photos and videos</h2>
+          <p className="mx-auto max-w-2xl text-sm text-muted">
+            Upload multiple images and short clips to showcase the property.
+          </p>
+        </header>
+
+        <section className="surface-soft p-8 rounded-2xl border border-[color:var(--surface-border)] space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Images uploader */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-secondary flex items-center gap-2">
+                <PhotoIcon className="h-5 w-5 text-muted" /> Photos
+              </p>
+              <div
+                className="rounded-xl border border-dashed border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-5 text-center"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (e.dataTransfer.files?.length) addImages(e.dataTransfer.files)
+                }}
+              >
+                <p className="text-sm text-secondary">Drag & drop images here</p>
+                <p className="text-xs text-muted">or</p>
+                <button type="button" className="btn btn-secondary" onClick={() => imageInputRef.current?.click()}>
+                  Select images
+                </button>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) addImages(e.target.files)
+                    e.currentTarget.value = ''
+                  }}
+                />
+              </div>
+
+              {images.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {images.map((m, idx) => (
+                    <div key={m.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={m.url} alt={m.file.name} className="h-32 w-full object-cover" />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => removeImageAt(idx)}
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Videos uploader */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-secondary flex items-center gap-2">
+                <FilmIcon className="h-5 w-5 text-muted" /> Videos
+              </p>
+              <div
+                className="rounded-xl border border-dashed border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-5 text-center"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (e.dataTransfer.files?.length) addVideos(e.dataTransfer.files)
+                }}
+              >
+                <p className="text-sm text-secondary">Drag & drop videos here</p>
+                <p className="text-xs text-muted">or</p>
+                <button type="button" className="btn btn-secondary" onClick={() => videoInputRef.current?.click()}>
+                  Select videos
+                </button>
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) addVideos(e.target.files)
+                    e.currentTarget.value = ''
+                  }}
+                />
+              </div>
+
+              {videos.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {videos.map((v, idx) => (
+                    <div key={v.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
+                      <video className="h-32 w-full object-cover" src={v.url} controls preload="metadata" />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => removeVideoAt(idx)}
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* 3D upload & processing */}
       <div className="container space-y-10 py-12">
         <header className="space-y-3 text-center">
           <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">

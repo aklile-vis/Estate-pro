@@ -29,7 +29,8 @@
     "frontend:dev": "next dev",
     "backend:dev": "python3 backend/main.py",
     "seed:demo-users": "node scripts/seed_demo_users.js",
-    "smoke": "python3 scripts/smoke_test.py"
+    "smoke": "python3 scripts/smoke_test.py",
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.7",
@@ -68,13 +69,14 @@
     "@babylonjs/loaders": "^7.36.0",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.19",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   },
   "overrides": {
     "postprocessing": "6.37.8",

@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "windows"]
 }
 
@@ -26,6 +26,7 @@ model User {
   uploads           FileUpload[]
   materialLibraries MaterialLibrary[]
   exportLogs        ExportLog[]
+  Media             Media[]
 
   @@map("users")
 }
@@ -49,6 +50,9 @@ model Property {
   userId   String
   user     User      @relation(fields: [userId], references: [id])
   projects Project[]
+
+  category PropertyCategory @default(RESIDENTIAL)
+  media    Media[]
 
   @@map("properties")
 }
@@ -159,24 +163,25 @@ model PropertyUnit {
   // Editor state and artifacts
   editorState     Json?
   editorStatePath String?
+  media           Media[]
 
   @@map("property_units")
 }
 
 model BuyerSelection {
-  id         String       @id @default(cuid())
-  unitId     String
-  unit       PropertyUnit @relation(fields: [unitId], references: [id])
-  userId     String?
-  selections Json
-  priceTotal Float        @default(0)
-  basePrice  Float        @default(0)
-  addonTotal Float        @default(0)
-  lineItems  Json?
-  clientPrice Float?
+  id              String       @id @default(cuid())
+  unitId          String
+  unit            PropertyUnit @relation(fields: [unitId], references: [id])
+  userId          String?
+  selections      Json
+  priceTotal      Float        @default(0)
+  basePrice       Float        @default(0)
+  addonTotal      Float        @default(0)
+  lineItems       Json?
+  clientPrice     Float?
   priceDifference Float?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@map("buyer_selections")
 }
@@ -218,14 +223,14 @@ model UnitMaterialWhitelist {
 }
 
 model ExportLog {
-  id           String       @id @default(cuid())
-  unitId       String
-  unit         PropertyUnit @relation(fields: [unitId], references: [id])
-  userId       String?
-  user         User?        @relation(fields: [userId], references: [id])
+  id            String       @id @default(cuid())
+  unitId        String
+  unit          PropertyUnit @relation(fields: [unitId], references: [id])
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id])
   artifactCount Int          @default(0)
-  metadata     Json?
-  createdAt    DateTime      @default(now())
+  metadata      Json?
+  createdAt     DateTime     @default(now())
 
   @@map("export_logs")
 }
@@ -380,4 +385,58 @@ enum FileStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum PropertyCategory {
+  RESIDENTIAL
+  COMMERCIAL
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  MODEL
+  OTHER
+}
+
+enum MediaRole {
+  COVER
+  GALLERY
+  FLOORPLAN
+  VIRTUAL_TOUR
+  DOCUMENT
+  OTHER
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Classification
+  type      MediaType
+  role      MediaRole?
+  sortOrder Int        @default(0)
+
+  // Storage & presentation (direct URL)
+  url      String
+  mimeType String?
+  fileSize Int?
+  altText  String?
+  caption  String?
+
+  // Scope (exactly one is usually set)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId String?
+
+  unit   PropertyUnit? @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId String?
+
+  // Attribution (optional)
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+
+  @@index([propertyId, type, role, sortOrder])
+  @@index([unitId, type, role, sortOrder])
 }
