@@ -1,0 +1,278 @@
+"use client"
+
+import Link from "next/link"
+import type { ReactNode } from "react"
+import {
+  CheckBadgeIcon,
+  ClipboardDocumentListIcon,
+  CubeTransparentIcon,
+  HomeModernIcon,
+  MapPinIcon,
+  PhotoIcon,
+  PlayCircleIcon,
+  TagIcon,
+} from "@heroicons/react/24/outline"
+
+const mockListing = {
+  title: "Luxury Smart Condo",
+  subtitle: "Premium 3-bedroom residence in the heart of Bole",
+  status: "Draft",
+  pricing: {
+    basePrice: "950,000",
+    currency: "ETB",
+  },
+  propertyType: "Residential / Condo",
+  location: "123 Palm Avenue, Addis Ababa",
+  specs: {
+    bedrooms: 3,
+    bathrooms: 2,
+    areaSqm: 165,
+  },
+  description:
+    "Thoughtfully designed condo featuring open-plan living, floor-to-ceiling windows, and fully integrated smart home controls.",
+  amenities: ["Private balcony", "High-speed fiber", "Concierge", "Solar backup"],
+  media: {
+    images: [
+      "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1616594039964-30b227d047a5?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=80",
+    ],
+    videos: [
+      {
+        url: "https://example.com/media/virtual-tour.mp4",
+        label: "Virtual walk-through",
+      },
+    ],
+  },
+  immersive: {
+    has3D: true,
+    glbPath: "models/condo_a.glb",
+    viewerLink: "/agent/editor/condo-a",
+    processedAt: "2025-10-01 18:32",
+  },
+}
+
+export default function AgentListingReviewPage() {
+  const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, media, immersive } =
+    mockListing
+
+  return (
+    <div className="min-h-screen bg-[color:var(--app-background)] text-primary">
+      <div className="border-b border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
+        <div className="container flex flex-col gap-6 py-10 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-2)] px-4 py-1.5 text-xs uppercase tracking-[0.35em] text-muted">
+              <ClipboardDocumentListIcon className="h-4 w-4" /> Review & Publish
+            </div>
+            <div>
+              <h1 className="headline text-3xl md:text-4xl">Final review before publishing</h1>
+              <p className="mt-2 max-w-2xl text-sm text-muted">
+                Confirm the listing information pulled from your upload workflow. Everything below mirrors what buyers will
+                see once you publish.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link href="/agent/upload" className="btn btn-secondary">
+              Return to edit
+            </Link>
+            <button type="button" className="btn btn-primary">
+              Publish listing
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="container grid gap-8 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-8">
+          {/* Overview */}
+          <section className="surface-soft rounded-3xl border border-[color:var(--surface-border)] p-8 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div className="space-y-4">
+                <p className="text-xs uppercase tracking-[0.4em] text-muted">Listing snapshot</p>
+                <div>
+                  <h2 className="text-2xl font-semibold text-primary">{title}</h2>
+                  <p className="text-sm text-secondary">{subtitle}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] px-3 py-1">
+                    <TagIcon className="h-4 w-4" /> {propertyType}
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] px-3 py-1">
+                    <MapPinIcon className="h-4 w-4" /> {location}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2 text-right">
+                <p className="text-xs uppercase tracking-[0.35em] text-muted">Base price</p>
+                <p className="text-3xl font-semibold text-primary">
+                  {pricing.currency} {pricing.basePrice}
+                </p>
+                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--surface-2)] px-3 py-1 text-xs uppercase tracking-wide text-muted">
+                  <CheckBadgeIcon className="h-4 w-4" /> {status}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-8 grid gap-6 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 md:grid-cols-3">
+              <DetailBlock icon={<HomeModernIcon className="h-6 w-6" />} label="Bedrooms" value={`${specs.bedrooms} bed`} />
+              <DetailBlock icon={<HomeModernIcon className="h-6 w-6" />} label="Bathrooms" value={`${specs.bathrooms} bath`} />
+              <DetailBlock icon={<HomeModernIcon className="h-6 w-6" />} label="Area" value={`${specs.areaSqm} sqm`} />
+            </div>
+
+            <article className="mt-8 space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Listing description</h3>
+              <p className="text-sm leading-relaxed text-secondary">{description}</p>
+            </article>
+
+            <div className="mt-8 space-y-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Key amenities</h3>
+              <ul className="flex flex-wrap gap-2">
+                {amenities.map((item) => (
+                  <li
+                    key={item}
+                    className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-1 text-sm text-secondary"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-500)]" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
+          {/* Media */}
+          <section className="space-y-6">
+            <header className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.35em] text-muted">Media gallery</p>
+                <h3 className="text-lg font-semibold text-primary">Photos & video clips</h3>
+                <p className="text-xs text-muted">These uploads will appear in the order shown below.</p>
+              </div>
+            </header>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {media.images.map((url) => (
+                <figure
+                  key={url}
+                  className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="Listing media" className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                  <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent px-3 py-2 text-xs text-white">
+                    Photo asset
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+
+            {media.videos.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {media.videos.map((video) => (
+                  <div
+                    key={video.url}
+                    className="flex items-center justify-between rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--surface-2)]">
+                        <PlayCircleIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-primary">{video.label}</p>
+                        <p className="text-xs text-muted">{video.url}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs uppercase tracking-wide text-disabled">Video</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Sidebar */}
+        <aside className="space-y-6">
+          <section className="surface-soft rounded-3xl border border-[color:var(--surface-border)] p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Publish readiness</h3>
+            <dl className="mt-4 space-y-3 text-sm text-secondary">
+              <div className="flex items-center justify-between">
+                <dt>Details complete</dt>
+                <dd className="font-medium text-[color:var(--success-500)]">Ready</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt>Media assets</dt>
+                <dd>{media.images.length + media.videos.length} files</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt>Pricing</dt>
+                <dd>
+                  {pricing.currency} {pricing.basePrice}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="surface-soft space-y-4 rounded-3xl border border-[color:var(--surface-border)] p-6 shadow-sm">
+            <header className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.35em] text-muted">Immersive assets</p>
+              <h3 className="text-lg font-semibold text-primary">3D listing summary</h3>
+              <p className="text-xs text-muted">
+                {immersive.has3D
+                  ? "This listing includes processed 3D assets from the editor workflow."
+                  : "No 3D assets were attached to this listing."}
+              </p>
+            </header>
+
+            {immersive.has3D ? (
+              <div className="space-y-4 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--surface-2)]">
+                    <CubeTransparentIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-primary">Processed GLB</p>
+                    <p className="text-xs text-muted">{immersive.glbPath}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted">
+                  <span>Processed at</span>
+                  <span>{immersive.processedAt}</span>
+                </div>
+                <Link href={immersive.viewerLink} className="btn btn-secondary w-full justify-center">
+                  Open immersive editor
+                </Link>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 text-center text-sm text-muted">
+                <PhotoIcon className="mx-auto h-10 w-10 text-[color:var(--accent-400)]" />
+                <p className="mt-3">No 3D media has been generated for this listing.</p>
+              </div>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+interface DetailBlockProps {
+  icon: ReactNode
+  label: string
+  value: string
+}
+
+function DetailBlock({ icon, label, value }: DetailBlockProps) {
+  return (
+    <div className="space-y-2 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+      <div className="flex items-center gap-3 text-muted">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--surface-2)] text-[color:var(--accent-500)]">
+          {icon}
+        </span>
+        <span className="text-xs uppercase tracking-wide">{label}</span>
+      </div>
+      <p className="text-lg font-semibold text-primary">{value}</p>
+    </div>
+  )
+}
