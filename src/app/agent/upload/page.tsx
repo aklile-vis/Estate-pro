@@ -306,7 +306,17 @@ export default function AgentUploadPage() {
   const handleChange = (field: keyof ListingFormState) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    setForm((prev) => ({ ...prev, [field]: event.target.value }))
+    const value = event.target.value
+    setForm((prev) => ({ ...prev, [field]: value }))
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
   }
   
   const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -396,9 +406,97 @@ export default function AgentUploadPage() {
   const [propTab, setPropTab] = useState<PropertyCategory>('Residential')
   const [propertyType, setPropertyType] = useState<string>('') // selected value (one of arrays above)
   const propRef = useRef<HTMLDivElement | null>(null)
+  
+  // Form validation state
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
+
+  // Field validation rules
+  const validateField = (name: string, value: string): string => {
+    switch (name) {
+      case 'title':
+        return !value ? 'Title is required' : value.length < 5 ? 'Title must be at least 5 characters' : ''
+      case 'basePrice':
+        return !value ? 'Price is required' : isNaN(Number(value)) ? 'Must be a valid number' : ''
+      case 'description':
+        return !value ? 'Description is required' : value.length < 10 ? 'Description must be at least 10 characters' : ''
+      case 'address':
+        return !value ? 'Address is required' : ''
+      case 'city':
+        return !value ? 'City is required' : ''
+      case 'bedrooms':
+        return !value ? 'Number of bedrooms is required' : isNaN(Number(value)) ? 'Must be a valid number' : ''
+      case 'bathrooms':
+        return !value ? 'Number of bathrooms is required' : isNaN(Number(value)) ? 'Must be a valid number' : ''
+      case 'areaSqm':
+        return !value ? 'Area is required' : isNaN(Number(value)) ? 'Must be a valid number' : Number(value) <= 0 ? 'Area must be greater than 0' : ''
+      default:
+        return ''
+    }
+  }
+
+  // Handle field blur (for validation)
+  const handleBlur = (field: keyof ListingFormState) => {
+    setTouched(prev => ({ ...prev, [field]: true }))
+    const error = validateField(field, form[field])
+    if (error) {
+      setErrors(prev => ({ ...prev, [field]: error }))
+    } else {
+      setErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
+  }
+
+  // Check if form is valid
+  const isFormValid = useMemo(() => {
+    return Object.keys(form).every(field => !validateField(field, form[field as keyof typeof form])) && propertyType
+  }, [form, propertyType])
+
+  // Validate entire form
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {}
+    let isValid = true
+
+    // Validate form fields
+    Object.keys(form).forEach(field => {
+      const error = validateField(field, form[field as keyof typeof form])
+      if (error) {
+        newErrors[field] = error
+        isValid = false
+      }
+    })
+
+    // Validate property type
+    if (!propertyType) {
+      newErrors.propertyType = 'Property type is required'
+      isValid = false
+    }
+
+    setErrors(newErrors)
+    
+    // Mark all fields as touched to show errors
+    const allTouched = Object.keys(form).reduce((acc, key) => ({
+      ...acc,
+      [key]: true
+    }), {})
+    setTouched(prev => ({
+      ...prev,
+      ...allTouched,
+      propertyType: true
+    }))
+    
+    return isValid
+  }
 
   // Persist traditional data to review page without hitting the DB
   const goToReview = useCallback(() => {
+    if (!validateForm()) {
+      return;
+    }
+    
     const STORAGE_KEY = 'agent:reviewDraft'
     const draft = {
       title: (form.title || '').trim(),
@@ -514,28 +612,40 @@ export default function AgentUploadPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Listing title</span>
-              <input
-                required
-                value={form.title}
-                onChange={handleChange('title')}
-                className="input h-11"
-                placeholder="Luxury smart condo"
-              />
+              <div className="relative">
+                <input
+                  required
+                  value={form.title}
+                  onChange={handleChange('title')}
+                  onBlur={() => handleBlur('title')}
+                  className="input h-11 w-full"
+                  placeholder="Luxury smart condo"
+                />
+                {errors.title && (
+                  <p className="mt-1 text-xs text-red-500">{errors.title}</p>
+                )}
+              </div>
             </label>
 
             <div className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Base price</span>
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.basePrice}
-                  onChange={handleChange('basePrice')}
-                  className="input h-11"
-                  placeholder="850000"
-                />
+                <div className="relative">
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.basePrice}
+                    onChange={handleChange('basePrice')}
+                    onBlur={() => handleBlur('basePrice')}
+                    className="input h-11 w-full"
+                    placeholder="850000"
+                  />
+                  {errors.basePrice && (
+                    <p className="mt-1 text-xs text-red-500">{errors.basePrice}</p>
+                  )}
+                </div>
                 <select
                   value={form.currency}
                   onChange={handleCurrencyChange}
@@ -552,34 +662,52 @@ export default function AgentUploadPage() {
           {/* Description */}
           <label className="space-y-1">
             <span className="text-[11px] uppercase tracking-wide text-muted">Headline description</span>
-            <textarea
-              rows={3}
-              value={form.description}
-              onChange={handleChange('description')}
-              className="input min-h-[96px]"
-              placeholder="Highlight key selling points, finishes, and amenities"
-            />
+            <div className="relative">
+              <textarea
+                rows={3}
+                value={form.description}
+                onChange={handleChange('description')}
+                onBlur={() => handleBlur('description')}
+                className="input min-h-[96px] w-full"
+                placeholder="Highlight key selling points, finishes, and amenities"
+              />
+              {errors.description && (
+                <p className="mt-1 text-xs text-red-500">{errors.description}</p>
+              )}
+            </div>
           </label>
 
           {/* Address / City */}
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Street address</span>
-              <input
-                value={form.address}
-                onChange={handleChange('address')}
-                className="input h-11"
-                placeholder="123 Palm Avenue"
-              />
+              <div className="relative">
+                <input
+                  value={form.address}
+                  onChange={handleChange('address')}
+                  onBlur={() => handleBlur('address')}
+                  className="input h-11 w-full"
+                  placeholder="123 Palm Avenue"
+                />
+                {errors.address && (
+                  <p className="mt-1 text-xs text-red-500">{errors.address}</p>
+                )}
+              </div>
             </label>
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">City / region</span>
-              <input
-                value={form.city}
-                onChange={handleChange('city')}
-                className="input h-11"
-                placeholder="Addis Ababa"
-              />
+              <div className="relative">
+                <input
+                  value={form.city}
+                  onChange={handleChange('city')}
+                  onBlur={() => handleBlur('city')}
+                  className="input h-11 w-full"
+                  placeholder="Addis Ababa"
+                />
+                {errors.city && (
+                  <p className="mt-1 text-xs text-red-500">{errors.city}</p>
+                )}
+              </div>
             </label>
           </div>
           {/* Property Type (dropdown with Residential/Commercial tabs) */}
@@ -588,18 +716,25 @@ export default function AgentUploadPage() {
 
             <div className="relative" ref={propRef}>
               {/* Field button */}
-              <button
-                type="button"
-                onClick={() => setPropTypeOpen((o) => !o)}
-                className="input h-11 w-full flex items-center justify-between"
-                aria-haspopup="listbox"
-                aria-expanded={propTypeOpen}
-              >
-                <span className={propertyType ? 'text-primary' : 'text-disabled'}>
-                  {propertyType || 'Select property type'}
-                </span>
-                <ChevronDownIcon className="h-5 w-5 text-muted" />
-              </button>
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setPropTypeOpen((o) => !o)}
+                  className={`input h-11 w-full flex items-center justify-between ${
+                    errors.propertyType ? 'border-red-500' : ''
+                  }`}
+                  aria-haspopup="listbox"
+                  aria-expanded={propTypeOpen}
+                >
+                  <span className={propertyType ? 'text-primary' : 'text-disabled'}>
+                    {propertyType || 'Select property type'}
+                  </span>
+                  <ChevronDownIcon className="h-5 w-5 text-muted" />
+                </button>
+                {errors.propertyType && (
+                  <p className="mt-1 text-xs text-red-500">{errors.propertyType}</p>
+                )}
+              </div>
 
               {/* Dropdown */}
               {propTypeOpen && (
@@ -653,8 +788,19 @@ export default function AgentUploadPage() {
                             key={label}
                             type="button"
                             onClick={() => {
-                              setPropertyType(label)
-                              setPropTypeOpen(false)
+                              const handlePropertyTypeSelect = (type: string) => {
+                                setPropertyType(type)
+                                setPropTypeOpen(false)
+                                // Clear property type error when a type is selected
+                                if (errors.propertyType) {
+                                  setErrors(prev => {
+                                    const newErrors = { ...prev }
+                                    delete newErrors.propertyType
+                                    return newErrors
+                                  })
+                                }
+                              }
+                              handlePropertyTypeSelect(label)
                             }}
                             className={`flex w-full items-center justify-between rounded-full border px-4 py-3 text-sm transition ${
                               selected
@@ -704,37 +850,55 @@ export default function AgentUploadPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Bedrooms</span>
-              <input
-                type="number"
-                min="0"
-                value={form.bedrooms}
-                onChange={handleChange('bedrooms')}
-                className="input h-11"
-                placeholder="3"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  value={form.bedrooms}
+                  onChange={handleChange('bedrooms')}
+                  onBlur={() => handleBlur('bedrooms')}
+                  className="input h-11 w-full"
+                  placeholder="3"
+                />
+                {errors.bedrooms && (
+                  <p className="mt-1 text-xs text-red-500">{errors.bedrooms}</p>
+                )}
+              </div>
             </label>
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Bathrooms</span>
-              <input
-                type="number"
-                min="0"
-                value={form.bathrooms}
-                onChange={handleChange('bathrooms')}
-                className="input h-11"
-                placeholder="2"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  value={form.bathrooms}
+                  onChange={handleChange('bathrooms')}
+                  onBlur={() => handleBlur('bathrooms')}
+                  className="input h-11 w-full"
+                  placeholder="2"
+                />
+                {errors.bathrooms && (
+                  <p className="mt-1 text-xs text-red-500">{errors.bathrooms}</p>
+                )}
+              </div>
             </label>
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Area (sqm)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={form.areaSqm}
-                onChange={handleChange('areaSqm')}
-                className="input h-11"
-                placeholder="120"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={form.areaSqm}
+                  onChange={handleChange('areaSqm')}
+                  onBlur={() => handleBlur('areaSqm')}
+                  className="input h-11 w-full"
+                  placeholder="120"
+                />
+                {errors.areaSqm && (
+                  <p className="mt-1 text-xs text-red-500">{errors.areaSqm}</p>
+                )}
+              </div>
             </label>
           </div>
         </section>
