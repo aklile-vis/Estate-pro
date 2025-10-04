@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import {
   ArrowUpOnSquareIcon,
@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { processCAD, uploadDesignFile } from '@/lib/backendClient'
@@ -86,6 +87,8 @@ export default function AgentUploadPage() {
   const [aiInsights, setAiInsights] = useState<Record<string, unknown> | null>(null)
   const [fileKind, setFileKind] = useState<UploadCategory | null>(null)
   const { token, user, isAuthenticated } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const isAgent = user?.role === 'AGENT' || user?.role === 'ADMIN'
   const [media, setMedia] = useState<MediaItem[]>([])
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -139,6 +142,9 @@ export default function AgentUploadPage() {
     setSavedUnitId(null)
     setAiInsights(null)
     setFileKind(null)
+    try {
+      sessionStorage.removeItem('agent:reviewDraft')
+    } catch { /* ignore */ }
   }, [])
 
   const handleSelect = useCallback(async (file: File) => {
@@ -290,7 +296,7 @@ export default function AgentUploadPage() {
   }
 
   type MediaItem = {
-    file: File
+    file?: File | null
     url: string
     kind: 'image' | 'video'
   }
@@ -309,7 +315,7 @@ export default function AgentUploadPage() {
   }
   
   // Images
-  type ImageItem = { file: File; url: string }
+  type ImageItem = { file?: File | null; url: string }
   const [images, setImages] = useState<ImageItem[]>([])
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -329,7 +335,7 @@ export default function AgentUploadPage() {
   }
 
   // Videos
-  type VideoItem = { file: File; url: string }
+  type VideoItem = { file?: File | null; url: string }
   const [videos, setVideos] = useState<VideoItem[]>([])
   const videoInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -390,6 +396,92 @@ export default function AgentUploadPage() {
   const [propTab, setPropTab] = useState<PropertyCategory>('Residential')
   const [propertyType, setPropertyType] = useState<string>('') // selected value (one of arrays above)
   const propRef = useRef<HTMLDivElement | null>(null)
+
+  // Persist traditional data to review page without hitting the DB
+  const goToReview = useCallback(() => {
+    const STORAGE_KEY = 'agent:reviewDraft'
+    const draft = {
+      title: (form.title || '').trim(),
+      subtitle: '',
+      status: 'Draft',
+      pricing: {
+        basePrice: (form.basePrice || '').trim(),
+        currency: (form.currency || 'ETB').trim().toUpperCase(),
+      },
+      propertyType: propertyType || '',
+      address: (form.address || '').trim(),
+      city: (form.city || '').trim(),
+      location: [form.address?.trim(), form.city?.trim()].filter(Boolean).join(', '),
+      specs: {
+        bedrooms: form.bedrooms ? Number(form.bedrooms) : 0,
+        bathrooms: form.bathrooms ? Number(form.bathrooms) : 0,
+        areaSqm: form.areaSqm ? Number(form.areaSqm) : 0,
+      },
+      description: (form.description || '').trim(),
+      amenities: [] as string[],
+      media: {
+        images: images.map((m) => m.url),
+        videos: videos.map((v) => ({ url: v.url, label: v.file?.name || 'Video clip' })),
+      },
+      immersive: { has3D: false },
+    }
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+    } catch {
+      /* ignore storage errors */
+    }
+    router.push('/agent/review')
+  }, [form.title, form.basePrice, form.currency, form.address, form.city, form.bedrooms, form.bathrooms, form.areaSqm, form.description, propertyType, images, videos, router])
+
+  // Hydrate form state only when returning via Review CTA (restore=1)
+  useEffect(() => {
+    try {
+      const restore = searchParams?.get('restore') === '1'
+      if (!restore) {
+        // ensure stray drafts don't leak across sessions unless explicitly restoring
+        sessionStorage.removeItem('agent:reviewDraft')
+        return
+      }
+      const raw = sessionStorage.getItem('agent:reviewDraft')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      setForm((prev) => ({
+        ...prev,
+        title: typeof parsed?.title === 'string' ? parsed.title : prev.title,
+        basePrice: typeof parsed?.pricing?.basePrice === 'string' || typeof parsed?.pricing?.basePrice === 'number'
+          ? String(parsed.pricing.basePrice)
+          : prev.basePrice,
+        description: typeof parsed?.description === 'string' ? parsed.description : prev.description,
+        address: typeof parsed?.address === 'string' ? parsed.address : prev.address,
+        city: typeof parsed?.city === 'string' ? parsed.city : prev.city,
+        bedrooms: typeof parsed?.specs?.bedrooms === 'number' || typeof parsed?.specs?.bedrooms === 'string'
+          ? String(parsed.specs.bedrooms)
+          : prev.bedrooms,
+        bathrooms: typeof parsed?.specs?.bathrooms === 'number' || typeof parsed?.specs?.bathrooms === 'string'
+          ? String(parsed.specs.bathrooms)
+          : prev.bathrooms,
+        areaSqm: typeof parsed?.specs?.areaSqm === 'number' || typeof parsed?.specs?.areaSqm === 'string'
+          ? String(parsed.specs.areaSqm)
+          : prev.areaSqm,
+        currency: typeof parsed?.pricing?.currency === 'string' ? parsed.pricing.currency : prev.currency,
+      }))
+      if (typeof parsed?.propertyType === 'string') setPropertyType(parsed.propertyType)
+      if (Array.isArray(parsed?.media?.images)) {
+        const restored = (parsed.media.images as string[]).filter(Boolean).map((url: string) => ({ url, file: null }))
+        setImages(restored)
+      }
+      if (Array.isArray(parsed?.media?.videos)) {
+        const restoredV = (parsed.media.videos as Array<{ url: string }>).filter(Boolean).map((v) => ({ url: v.url, file: null }))
+        setVideos(restoredV)
+      }
+      // Clear the draft so a refresh/back won't rehydrate again
+      sessionStorage.removeItem('agent:reviewDraft')
+      // Strip the restore param from the URL
+      router.replace('/agent/upload')
+    } catch {
+      // ignore
+    }
+  }, [router, searchParams])
 
   // close on outside click
   useEffect(() => {
@@ -698,7 +790,7 @@ export default function AgentUploadPage() {
                   {images.map((m, idx) => (
                     <div key={m.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={m.url} alt={m.file.name} className="h-32 w-full object-cover" />
+                      <img src={m.url} alt={m.file?.name || 'Listing image'} className="h-32 w-full object-cover" />
                       <button
                         type="button"
                         className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -762,6 +854,34 @@ export default function AgentUploadPage() {
             </div>
           </div>
         </section>
+      </div>
+
+      {/* CTA: continue to read-only review (no 3D flow) */}
+      <div className="container py-4">
+        <div className="flex items-center justify-end gap-3">
+          <button 
+            type="button" 
+            className="btn btn-secondary"
+            onClick={() => {
+              setForm(DEFAULT_FORM);
+              setImages([]);
+              setVideos([]);
+              setPropertyType('');
+              try {
+                sessionStorage.removeItem('agent:reviewDraft');
+              } catch { /* ignore */ }
+            }}
+          >
+            Clear 
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={goToReview}
+          >
+            Continue to review (no 3D)
+          </button>
+        </div>
       </div>
 
       {/* 3D upload & processing */}

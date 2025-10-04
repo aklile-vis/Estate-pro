@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import {
   CheckBadgeIcon,
   ClipboardDocumentListIcon,
@@ -54,8 +54,51 @@ const mockListing = {
 }
 
 export default function AgentListingReviewPage() {
+  const [draft, setDraft] = useState<typeof mockListing | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('agent:reviewDraft')
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      // Basic shape guard and normalisation to match mockListing structure
+      const normalized: typeof mockListing = {
+        title: typeof parsed?.title === 'string' ? parsed.title : '',
+        subtitle: typeof parsed?.subtitle === 'string' ? parsed.subtitle : '',
+        status: 'Draft',
+        pricing: {
+          basePrice: typeof parsed?.pricing?.basePrice === 'string' ? parsed.pricing.basePrice : String(parsed?.pricing?.basePrice || ''),
+          currency: typeof parsed?.pricing?.currency === 'string' ? parsed.pricing.currency : 'ETB',
+        },
+        propertyType: typeof parsed?.propertyType === 'string' ? parsed.propertyType : '',
+        location: typeof parsed?.location === 'string' ? parsed.location : '',
+        specs: {
+          bedrooms: Number(parsed?.specs?.bedrooms || 0),
+          bathrooms: Number(parsed?.specs?.bathrooms || 0),
+          areaSqm: Number(parsed?.specs?.areaSqm || 0),
+        },
+        description: typeof parsed?.description === 'string' ? parsed.description : '',
+        amenities: Array.isArray(parsed?.amenities) ? parsed.amenities : [],
+        media: {
+          images: Array.isArray(parsed?.media?.images) ? parsed.media.images : [],
+          videos: Array.isArray(parsed?.media?.videos) ? parsed.media.videos : [],
+        },
+        immersive: {
+          has3D: Boolean(parsed?.immersive?.has3D),
+          glbPath: parsed?.immersive?.glbPath || undefined,
+          viewerLink: parsed?.immersive?.viewerLink || undefined,
+          processedAt: parsed?.immersive?.processedAt || undefined,
+        },
+      }
+      setDraft(normalized)
+    } catch {
+      // ignore parse/storage errors
+    }
+  }, [])
+
+  const source = draft || mockListing
   const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, media, immersive } =
-    mockListing
+    source
 
   return (
     <div className="min-h-screen bg-[color:var(--app-background)] text-primary">
@@ -75,7 +118,7 @@ export default function AgentListingReviewPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link href="/agent/upload" className="btn btn-secondary">
+            <Link href="/agent/upload?restore=1" className="btn btn-secondary">
               Return to edit
             </Link>
             <button type="button" className="btn btn-primary">
