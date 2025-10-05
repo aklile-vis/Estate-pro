@@ -36,5 +36,5 @@ export async function GET(request: NextRequest) {
     return response
   }
 
-  return NextResponse.json({ authenticated: true, user })
+  return NextResponse.json({ authenticated: true, user, token })
 }

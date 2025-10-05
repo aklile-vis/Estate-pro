@@ -2,6 +2,9 @@
 
 import Link from "next/link"
 import { useEffect, useState, type ReactNode } from "react"
+import { useRouter } from 'next/navigation'
+
+import { useAuth } from '@/contexts/AuthContext'
 import {
   CheckBadgeIcon,
   ClipboardDocumentListIcon,
@@ -100,6 +103,74 @@ export default function AgentListingReviewPage() {
   const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, media, immersive } =
     source
 
+  const router = useRouter()
+  const { token } = useAuth()
+
+  const publishListing = async () => {
+    if (!token) {
+      console.error("Authentication token not found.")
+      // Optionally, redirect to login or show an error message
+      return
+    }
+
+    // Determine category and subtype from propertyType
+    let category: "Residential" | "Commercial" = "Residential"
+    let subtype: string = propertyType.split(' / ')[1] || propertyType.split(' / ')[0] || 'Other'
+
+    if (propertyType.includes('Commercial')) {
+      category = "Commercial"
+      subtype = propertyType.split(' / ')[1] || 'Other Commercial'
+    } else if (propertyType.includes('Residential')) {
+      category = "Residential"
+      subtype = propertyType.split(' / ')[1] || 'Other Residential'
+    }
+
+
+    const payload = {
+      title: title,
+      description: description,
+      basePrice: parseFloat(pricing.basePrice.replace(/,/g, '')), // Changed from 'price' to 'basePrice'
+      currency: pricing.currency,
+      address: location.split(', ')[0],
+      city: location.split(', ')[1],
+      images: media.images,
+      videos: media.videos.map(v => v.url),
+      category: category,
+      subtype: subtype,
+      bedrooms: specs.bedrooms,
+      bathrooms: specs.bathrooms,
+      areaSqm: specs.areaSqm,
+      isPublished: true, // Mark as published when submitted from here
+      // unitId is intentionally omitted if not present in the draft
+    }
+
+    try {
+      const response = await fetch('/api/listings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to publish listing')
+      }
+
+      const result = await response.json()
+      console.log('Listing published successfully:', result)
+      // Clear the draft after successful publication
+      sessionStorage.removeItem('agent:reviewDraft')
+      router.push('/agent/dashboard') // Redirect to dashboard or a success page
+    } catch (error: any) {
+      console.error('Error publishing listing:', error.message)
+      // Display error message to the user
+      alert(`Error publishing listing: ${error.message}`)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[color:var(--app-background)] text-primary">
       <div className="border-b border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
@@ -121,7 +192,7 @@ export default function AgentListingReviewPage() {
             <Link href="/agent/upload?restore=1" className="btn btn-secondary">
               Return to edit
             </Link>
-            <button type="button" className="btn btn-primary">
+            <button type="button" className="btn btn-primary" onClick={publishListing}>
               Publish listing
             </button>
           </div>

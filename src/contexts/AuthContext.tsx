@@ -40,6 +40,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const data = await response.json().catch(() => ({}))
       if (data?.authenticated && data?.user) {
         setUser(data.user as User)
+        setToken(data.token ?? null)
       } else {
         setUser(null)
         setToken(null)

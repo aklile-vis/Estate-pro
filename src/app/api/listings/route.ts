@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     if (!auth.ok) return auth.response
 
     const body = await request.json()
-    const required = ['unitId', 'title', 'basePrice']
+    const required = ['title', 'basePrice'] // unitId is now optional
     for (const k of required) {
       if (body[k] == null || body[k] === '') {
         return NextResponse.json({ error: `${k} is required` }, { status: 400 })
@@ -54,23 +54,42 @@ export async function POST(request: NextRequest) {
       basePrice,
       currency,
       coverImage: body.coverImage ?? null,
+      // Default to not published, agent can publish explicitly
+      isPublished: body.isPublished ?? false, 
     }
 
-    // Ensure the unit exists and has a processed model (GLB) to prevent wrong model publish
-    const unit = await prisma.propertyUnit.findUnique({ where: { id: body.unitId }, include: { fileUpload: true } })
-    if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })
-    const glbPath = unit.fileUpload?.glbFilePath
-    if (!glbPath) {
-      return NextResponse.json({ error: 'Model is not processed yet. Generate GLB before publishing.' }, { status: 400 })
+    let targetUnitId = body.unitId
+
+    // If unitId is provided, validate it and its GLB path
+    if (targetUnitId) {
+      const unit = await prisma.propertyUnit.findUnique({ where: { id: targetUnitId }, include: { fileUpload: true } })
+      if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 404 })
+      const glbPath = unit.fileUpload?.glbFilePath
+      if (!glbPath) {
+        return NextResponse.json({ error: 'Model is not processed yet. Generate GLB before publishing.' }, { status: 400 })
+      }
+    } else {
+      // If no unitId, create a new PropertyUnit for this listing
+      const newUnit = await prisma.propertyUnit.create({
+        data: {
+          name: listingData.title, // Use title as the name for PropertyUnit
+        },
+      })
+      targetUnitId = newUnit.id
+    }
+    
+    // Ensure that a unitId is always present at this point
+    if (!targetUnitId) {
+      return NextResponse.json({ error: 'Failed to create or find a property unit.' }, { status: 500 })
     }
 
     const listing = await prisma.unitListing.upsert({
-      where: { unitId: body.unitId },
+      where: { unitId: targetUnitId },
       update: {
         ...(listingData as any),
       },
       create: {
-        unitId: body.unitId,
+        unitId: targetUnitId,
         ...(listingData as any),
       }
     })
