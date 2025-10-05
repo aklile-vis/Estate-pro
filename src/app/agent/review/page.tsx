@@ -83,7 +83,14 @@ export default function AgentListingReviewPage() {
         description: typeof parsed?.description === 'string' ? parsed.description : '',
         amenities: Array.isArray(parsed?.amenities) ? parsed.amenities : [],
         media: {
-          images: Array.isArray(parsed?.media?.images) ? parsed.media.images : [],
+          images: Array.isArray(parsed?.media?.images) ? parsed.media.images.filter((url: string) => {
+            // Filter out problematic URLs and log them for debugging
+            if (url.includes('file_storage/processed/renders/') || url === 'placeholder.jpg') {
+              console.warn('Filtering out problematic image URL:', url)
+              return false
+            }
+            return true
+          }) : [],
           videos: Array.isArray(parsed?.media?.videos) ? parsed.media.videos : [],
         },
         immersive: {
@@ -105,6 +112,13 @@ export default function AgentListingReviewPage() {
 
   const router = useRouter()
   const { token } = useAuth()
+  const [isPublishing, setIsPublishing] = useState(false)
+
+  // Temporary function to clear session storage
+  const clearSessionStorage = () => {
+    sessionStorage.removeItem('agent:reviewDraft')
+    window.location.reload()
+  }
 
   const publishListing = async () => {
     if (!token) {
@@ -113,38 +127,39 @@ export default function AgentListingReviewPage() {
       return
     }
 
-    // Determine category and subtype from propertyType
-    let category: "Residential" | "Commercial" = "Residential"
-    let subtype: string = propertyType.split(' / ')[1] || propertyType.split(' / ')[0] || 'Other'
-
-    if (propertyType.includes('Commercial')) {
-      category = "Commercial"
-      subtype = propertyType.split(' / ')[1] || 'Other Commercial'
-    } else if (propertyType.includes('Residential')) {
-      category = "Residential"
-      subtype = propertyType.split(' / ')[1] || 'Other Residential'
-    }
-
-
-    const payload = {
-      title: title,
-      description: description,
-      basePrice: parseFloat(pricing.basePrice.replace(/,/g, '')), // Changed from 'price' to 'basePrice'
-      currency: pricing.currency,
-      address: location.split(', ')[0],
-      city: location.split(', ')[1],
-      images: media.images,
-      videos: media.videos.map(v => v.url),
-      category: category,
-      subtype: subtype,
-      bedrooms: specs.bedrooms,
-      bathrooms: specs.bathrooms,
-      areaSqm: specs.areaSqm,
-      isPublished: true, // Mark as published when submitted from here
-      // unitId is intentionally omitted if not present in the draft
-    }
+    setIsPublishing(true)
 
     try {
+      // Determine category and subtype from propertyType
+      let category: "Residential" | "Commercial" = "Residential"
+      let subtype: string = propertyType.split(' / ')[1] || propertyType.split(' / ')[0] || 'Other'
+
+      if (propertyType.includes('Commercial')) {
+        category = "Commercial"
+        subtype = propertyType.split(' / ')[1] || 'Other Commercial'
+      } else if (propertyType.includes('Residential')) {
+        category = "Residential"
+        subtype = propertyType.split(' / ')[1] || 'Other Residential'
+      }
+
+      const payload = {
+        title: title,
+        description: description,
+        basePrice: parseFloat(pricing.basePrice.replace(/,/g, '')), // Changed from 'price' to 'basePrice'
+        currency: pricing.currency,
+        address: location.split(', ')[0],
+        city: location.split(', ')[1],
+        images: media.images,
+        videos: media.videos.map(v => v.url),
+        category: category,
+        subtype: subtype,
+        bedrooms: specs.bedrooms,
+        bathrooms: specs.bathrooms,
+        areaSqm: specs.areaSqm,
+        isPublished: true, // Mark as published when submitted from here
+        // unitId is intentionally omitted if not present in the draft
+      }
+
       const response = await fetch('/api/listings', {
         method: 'POST',
         headers: {
@@ -161,13 +176,18 @@ export default function AgentListingReviewPage() {
 
       const result = await response.json()
       console.log('Listing published successfully:', result)
+      
       // Clear the draft after successful publication
       sessionStorage.removeItem('agent:reviewDraft')
-      router.push('/agent/dashboard') // Redirect to dashboard or a success page
+      
+      // Redirect to listings page
+      router.push('/listings')
     } catch (error: any) {
       console.error('Error publishing listing:', error.message)
       // Display error message to the user
       alert(`Error publishing listing: ${error.message}`)
+    } finally {
+      setIsPublishing(false)
     }
   }
 
@@ -192,8 +212,17 @@ export default function AgentListingReviewPage() {
             <Link href="/agent/upload?restore=1" className="btn btn-secondary">
               Return to edit
             </Link>
-            <button type="button" className="btn btn-primary" onClick={publishListing}>
-              Publish listing
+            <button 
+              type="button" 
+              className="btn btn-primary" 
+              onClick={publishListing}
+              disabled={isPublishing}
+            >
+              {isPublishing ? 'Publishing...' : 'Publish listing'}
+            </button>
+            {/* Temporary button to clear session storage */}
+            <button type="button" className="btn btn-outline" onClick={clearSessionStorage}>
+              Clear Session Data
             </button>
           </div>
         </div>
@@ -268,18 +297,27 @@ export default function AgentListingReviewPage() {
             </header>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {media.images.map((url) => (
-                <figure
-                  key={url}
-                  className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="Listing media" className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
-                  <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent px-3 py-2 text-xs text-white">
-                    Photo asset
-                  </figcaption>
-                </figure>
-              ))}
+              {media.images.map((path) => {
+                console.log('Image path:', path) // Debug log
+                // Construct the proper URL for the image
+                const imageUrl = path.startsWith('http') 
+                  ? path 
+                  : `/api/files/binary?path=${encodeURIComponent(path)}`
+                console.log('Constructed URL:', imageUrl) // Debug log
+                
+                return (
+                  <figure
+                    key={path}
+                    className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageUrl} alt="Listing media" className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent px-3 py-2 text-xs text-white">
+                      Photo asset
+                    </figcaption>
+                  </figure>
+                )
+              })}
             </div>
 
             {media.videos.length > 0 && (

@@ -329,17 +329,38 @@ export default function AgentUploadPage() {
   const [images, setImages] = useState<ImageItem[]>([])
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
-  const addImages = (files: FileList | File[]) => {
-    const items = Array.from(files)
-      .filter(f => f.type.startsWith('image/'))
-      .map(file => ({ file, url: URL.createObjectURL(file) }))
-    setImages(prev => [...prev, ...items])
+  const addImages = async (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
+    
+    for (const file of imageFiles) {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        
+        const response = await fetch('/api/upload-media', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('Upload result:', result) // Debug log
+          setImages(prev => [...prev, { file, url: result.url }])
+        } else {
+          console.error('Failed to upload image:', file.name)
+        }
+      } catch (error) {
+        console.error('Error uploading image:', error)
+      }
+    }
   }
   const removeImageAt = (idx: number) => {
     setImages(prev => {
       const copy = [...prev]
-      const [removed] = copy.splice(idx, 1)
-      if (removed) URL.revokeObjectURL(removed.url)
+      copy.splice(idx, 1)
       return copy
     })
   }
@@ -349,29 +370,42 @@ export default function AgentUploadPage() {
   const [videos, setVideos] = useState<VideoItem[]>([])
   const videoInputRef = useRef<HTMLInputElement | null>(null)
 
-  const addVideos = (files: FileList | File[]) => {
-    const items = Array.from(files)
-      .filter(f => f.type.startsWith('video/'))
-      .map(file => ({ file, url: URL.createObjectURL(file) }))
-    setVideos(prev => [...prev, ...items])
+  const addVideos = async (files: FileList | File[]) => {
+    const videoFiles = Array.from(files).filter(f => f.type.startsWith('video/'))
+    
+    for (const file of videoFiles) {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        
+        const response = await fetch('/api/upload-media', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          setVideos(prev => [...prev, { file, url: result.url }])
+        } else {
+          console.error('Failed to upload video:', file.name)
+        }
+      } catch (error) {
+        console.error('Error uploading video:', error)
+      }
+    }
   }
   const removeVideoAt = (idx: number) => {
     setVideos(prev => {
       const copy = [...prev]
-      const [removed] = copy.splice(idx, 1)
-      if (removed) URL.revokeObjectURL(removed.url)
+      copy.splice(idx, 1)
       return copy
     })
   }
 
-  // Cleanup object URLs on unmount
-  useEffect(() => {
-    return () => {
-      images.forEach(m => URL.revokeObjectURL(m.url))
-      videos.forEach(v => URL.revokeObjectURL(v.url))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // No cleanup needed since we're using server URLs instead of blob URLs
 
   const RESIDENTIAL_TYPES = [
     'Apartment',
@@ -951,10 +985,16 @@ export default function AgentUploadPage() {
 
               {images.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {images.map((m, idx) => (
-                    <div key={m.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={m.url} alt={m.file?.name || 'Listing image'} className="h-32 w-full object-cover" />
+                  {images.map((m, idx) => {
+                    // Construct the proper URL for the image
+                    const imageUrl = m.url.startsWith('http') 
+                      ? m.url 
+                      : `/api/files/binary?path=${encodeURIComponent(m.url)}`
+                    
+                    return (
+                      <div key={m.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imageUrl} alt={m.file?.name || 'Listing image'} className="h-32 w-full object-cover" />
                       <button
                         type="button"
                         className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -963,7 +1003,8 @@ export default function AgentUploadPage() {
                         <XMarkIcon className="h-4 w-4" />
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1001,9 +1042,15 @@ export default function AgentUploadPage() {
 
               {videos.length > 0 && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {videos.map((v, idx) => (
-                    <div key={v.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
-                      <video className="h-32 w-full object-cover" src={v.url} controls preload="metadata" />
+                  {videos.map((v, idx) => {
+                    // Construct the proper URL for the video
+                    const videoUrl = v.url.startsWith('http') 
+                      ? v.url 
+                      : `/api/files/binary?path=${encodeURIComponent(v.url)}`
+                    
+                    return (
+                      <div key={v.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
+                        <video className="h-32 w-full object-cover" src={videoUrl} controls preload="metadata" />
                       <button
                         type="button"
                         className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -1012,7 +1059,8 @@ export default function AgentUploadPage() {
                         <XMarkIcon className="h-4 w-4" />
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

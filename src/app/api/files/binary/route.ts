@@ -27,6 +27,7 @@ const allowedRoots = [
   [ 'file_storage', 'status' ],
   [ 'file_storage', 'processed' ],
   [ 'file_storage', 'models' ],
+  [ 'file_storage', 'media' ],
   [ 'processed' ],
   [ 'models' ],
   [ 'uploads' ],
@@ -47,19 +48,31 @@ async function ensureListingAllowsAccess(listingId: string, targetPath: string) 
   const { prisma } = await import('@/lib/database')
   const listing = await prisma.unitListing.findUnique({
     where: { id: listingId },
-    include: { unit: { include: { fileUpload: true } } },
+    include: { 
+      unit: { 
+        include: { 
+          fileUpload: true,
+          media: true // Include media files
+        } 
+      } 
+    },
   })
   if (!listing || !listing.isPublished) {
     return false
   }
+  
+  // Check 3D model assets
   const assetPaths = [
     listing.unit?.fileUpload?.glbFilePath,
     listing.unit?.fileUpload?.ifcFilePath,
     listing.unit?.fileUpload?.processedFilePath,
   ]
-  return assetPaths
-    .filter(Boolean)
-    .some((assetPath) => resolve(String(assetPath)) === targetPath)
+  
+  // Check media files
+  const mediaPaths = listing.unit?.media?.map(media => media.url) || []
+  
+  const allPaths = [...assetPaths, ...mediaPaths].filter(Boolean)
+  return allPaths.some((assetPath) => resolve(String(assetPath)) === targetPath)
 }
 
 export async function GET(request: NextRequest) {

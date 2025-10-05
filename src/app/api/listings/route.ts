@@ -83,16 +83,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create or find a property unit.' }, { status: 500 })
     }
 
+    // Get the first image URL for cover image
+    const coverImageUrl = body.images && body.images.length > 0 ? body.images[0] : null
+
     const listing = await prisma.unitListing.upsert({
       where: { unitId: targetUnitId },
       update: {
         ...(listingData as any),
+        coverImage: coverImageUrl,
       },
       create: {
         unitId: targetUnitId,
         ...(listingData as any),
+        coverImage: coverImageUrl,
       }
     })
+
+    // Create Media entries for images and videos
+    if (body.images && Array.isArray(body.images) && body.images.length > 0) {
+      const imageMedia = body.images.map((url: string, index: number) => ({
+        type: 'IMAGE' as const,
+        role: index === 0 ? 'COVER' as const : 'GALLERY' as const,
+        url: url,
+        sortOrder: index,
+        unitId: targetUnitId,
+        uploadedById: auth.user?.id,
+      }))
+      
+      await prisma.media.createMany({
+        data: imageMedia
+      })
+    }
+
+    if (body.videos && Array.isArray(body.videos) && body.videos.length > 0) {
+      const videoMedia = body.videos.map((url: string, index: number) => ({
+        type: 'VIDEO' as const,
+        role: 'GALLERY' as const,
+        url: url,
+        sortOrder: index,
+        unitId: targetUnitId,
+        uploadedById: auth.user?.id,
+      }))
+      
+      await prisma.media.createMany({
+        data: videoMedia
+      })
+    }
 
     return NextResponse.json(listing)
   } catch (e: any) {
