@@ -157,6 +157,9 @@ export default function AgentListingReviewPage() {
         bathrooms: specs.bathrooms,
         areaSqm: specs.areaSqm,
         isPublished: true, // Mark as published when submitted from here
+        immersive: {
+          has3D: immersive.has3D,
+        },
         // unitId is intentionally omitted if not present in the draft
       }
 
@@ -341,6 +344,43 @@ export default function AgentListingReviewPage() {
                 ))}
               </div>
             )}
+          </section>
+
+          {/* Immersive Pipeline Status */}
+          <section className="space-y-6">
+            <header className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.35em] text-muted">Pipeline configuration</p>
+                <h3 className="text-lg font-semibold text-primary">Immersive viewer</h3>
+                <p className="text-xs text-muted">3D interactive experience settings.</p>
+              </div>
+            </header>
+
+            <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`inline-flex h-3 w-3 rounded-full ${immersive.has3D ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                  <div>
+                    <p className="text-sm font-medium text-primary">
+                      {immersive.has3D ? '3D Pipeline Enabled' : 'Traditional Listing Only'}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {immersive.has3D 
+                        ? 'This listing supports interactive 3D viewing' 
+                        : 'This listing uses traditional gallery view only'
+                      }
+                    </p>
+                  </div>
+                </div>
+                <div className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  immersive.has3D 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {immersive.has3D ? '3D Ready' : 'Gallery Only'}
+                </div>
+              </div>
+            </div>
           </section>
         </div>
 

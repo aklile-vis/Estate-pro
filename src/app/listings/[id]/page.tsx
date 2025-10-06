@@ -10,6 +10,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { SUPPORTED_CURRENCIES, convertAmount, formatPrice } from '@/lib/utils'
+import TraditionalViewer from "./TraditionalViewer"
 
 type MaterialCategory = 'wall' | 'floor' | 'ceiling'
 type Option = { id: string; name: string; category: MaterialCategory | string; unit: string; price: number; baseColorHex?: string | null; albedoUrl?: string|null; normalUrl?: string|null; roughnessMapUrl?: string|null; metallicMapUrl?: string|null; aoMapUrl?: string|null; tilingScale?: number|null }
@@ -194,6 +195,39 @@ export default function PublicListingPage() {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
 
+  type ViewerTab = "immersive" | "traditional"
+  const [activeTab, setActiveTab] = useState<ViewerTab>("traditional")
+  const [has3DSupport, setHas3DSupport] = useState<boolean>(false)
+
+  const tabOrder: ViewerTab[] = ["immersive", "traditional"]
+  const tabRefs = useRef<Record<ViewerTab, HTMLButtonElement | null>>({
+    immersive: null,
+    traditional: null,
+  })
+
+  const onTabsKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return
+    e.preventDefault()
+    const i = tabOrder.indexOf(activeTab)
+    const next =
+      e.key === "ArrowRight"
+        ? tabOrder[(i + 1) % tabOrder.length]
+        : tabOrder[(i - 1 + tabOrder.length) % tabOrder.length]
+    
+    // Skip immersive tab if 3D is not supported
+    if (next === "immersive" && !has3DSupport) {
+      const skipNext = e.key === "ArrowRight" 
+        ? tabOrder[(i + 2) % tabOrder.length]
+        : tabOrder[(i - 2 + tabOrder.length) % tabOrder.length]
+      setActiveTab(skipNext)
+      tabRefs.current[skipNext]?.focus()
+    } else {
+      setActiveTab(next)
+      tabRefs.current[next]?.focus()
+    }
+  }
+
+
   useEffect(() => {
     let active = true
     fetch('/api/exchange-rates', { cache: 'no-store' })
@@ -308,6 +342,13 @@ export default function PublicListingPage() {
       const js = await r.json()
       if (!r.ok) { setStatus(js.error || 'Listing not found'); return }
       setData(js)
+      setHas3DSupport(js.listing?.has3D || false)
+      
+      // Force traditional tab if 3D is not supported
+      if (!js.listing?.has3D) {
+        setActiveTab("traditional")
+      }
+      
       if (Array.isArray(js.guidedViews)) {
         const normalized = js.guidedViews
           .map((entry: unknown) => {
@@ -325,7 +366,7 @@ export default function PublicListingPage() {
               target: tgt as [number, number, number],
             } satisfies GuidedView
           })
-          .filter((entry): entry is GuidedView => Boolean(entry))
+          .filter((entry: any): entry is GuidedView => Boolean(entry))
         setGuidedViews(normalized)
       } else {
         setGuidedViews([])
@@ -425,7 +466,7 @@ export default function PublicListingPage() {
           })
           setHistory(
             Array.isArray(payload.history)
-              ? payload.history.map((entry) => {
+              ? payload.history.map((entry: Partial<PriceBreakdown> & { selections?: Partial<Record<MaterialCategory, string>> }) => {
                   const partial = entry as Partial<PriceBreakdown> & {
                     selections?: Partial<Record<MaterialCategory, string>>
                   }
@@ -583,7 +624,7 @@ export default function PublicListingPage() {
         const fallback = { ...breakdown, selections: selected }
         if (Array.isArray(body.history)) {
           setHistory(
-            body.history.map((entry) => {
+            body.history.map((entry: Partial<PriceBreakdown> & { selections?: Partial<Record<MaterialCategory, string>> }) => {
               const partial = entry as Partial<PriceBreakdown> & {
                 selections?: Partial<Record<MaterialCategory, string>>
               }
@@ -675,293 +716,418 @@ export default function PublicListingPage() {
       {status && (
         <div className="border-b border-yellow-500/30 bg-yellow-500/10 px-6 py-2 text-xs text-yellow-100">{status}</div>
       )}
-      <div className="flex flex-1 min-h-0">
-        <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[color:var(--surface-0)]">
-          <div className="absolute right-6 top-6 z-10 flex gap-2">
+
+      {/* Browser-style tabs */}
+      <div className="bg-[color:var(--surface-1)] border-b border-[color:var(--surface-border)]">
+        <div className="px-6 pt-3">
+          <div
+            role="tablist"
+            aria-label="Viewer mode"
+            className="flex justify-center gap-2"
+            onKeyDown={onTabsKeyDown}
+          >
             <button
-              className={`rounded-sm border px-3 py-1 text-[10px] uppercase tracking-wide transition ${
-                isXrMode
-                  ? 'border-emerald-400/60 bg-emerald-500/20 text-white'
-                  : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-2)]'
-              }`}
-              onClick={() => setIsXrMode((prev) => !prev)}
+              id="tab-traditional"
+              ref={(el) => { tabRefs.current.traditional = el }}
+              role="tab"
+              type="button"
+              aria-controls="panel-traditional"
+              aria-selected={activeTab === "traditional"}
+              tabIndex={activeTab === "traditional" ? 0 : -1}
+              onClick={() => setActiveTab("traditional")}
+              className={`group relative min-w-[200px] rounded-t-xl border border-b-0 px-6 py-3 text-sm font-semibold transition-all duration-200
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-1)]
+                ${
+                  activeTab === "traditional"
+                    ? "border-[color:var(--surface-border)] bg-[color:var(--surface-0)] text-primary shadow-[0_-2px_8px_rgba(0,0,0,0.04)] scale-[1.02] z-10"
+                    : "border-[color:var(--surface-border)]/60 bg-[color:var(--surface-2)] text-muted hover:bg-[color:var(--surface-0)]/60 hover:text-secondary hover:border-[color:var(--surface-border)]"
+                }`}
             >
-              {isXrMode ? 'Exit WebXR' : 'Enter WebXR (beta)'}
-            </button>
-          </div>
-          {modelUrl ? (
-            <>
-              {isXrMode && <VRButton store={xrStore} />}
-              <Canvas
-                className="h-full w-full"
-                style={{ width: '100%', height: '100%' }}
-                shadows
-                camera={{ position: [6, 4, 8], fov: 50 }}
-                onCreated={({ camera }) => {
-                  cameraRef.current = camera as THREE.PerspectiveCamera
-                }}
-              >
-                <ambientLight intensity={0.6} />
-                <directionalLight position={[5, 10, 5]} intensity={0.9} castShadow />
-                <Environment preset="city" />
-                {isXrMode ? (
-                  <XR store={xrStore}>
-                    <Model url={modelUrl} onCategorized={handleCategorized} />
-                  </XR>
-                ) : (
-                  <Model url={modelUrl} onCategorized={handleCategorized} />
-                )}
-                {!isXrMode && (
-                  <OrbitControls
-                    ref={(value) => {
-                      controlsRef.current = value as OrbitControlsImpl | null
-                    }}
-                    enableDamping
-                    dampingFactor={0.05}
-                  />
-                )}
-              </Canvas>
-              {!isXrMode && (
-                <div className="absolute top-4 left-4 z-10 space-y-3 rounded-lg bg-white/95 p-3 text-xs text-gray-700 shadow-lg max-w-xs">
-                  <div>
-                    <p className="font-semibold text-sm">Move around</p>
-                    <ul className="mt-2 space-y-1">
-                      <li>• Click and drag to look around</li>
-                      <li>• Right-click and drag to slide sideways</li>
-                      <li>• Scroll to zoom in or out</li>
-                      <li>• Tap once, then drag on touch screens</li>
-                    </ul>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      className="rounded bg-[color:var(--brand-600)] px-3 py-1 text-[11px] uppercase tracking-wide text-white transition hover:bg-[color:var(--brand-500)]"
-                      onClick={resetView}
-                    >
-                      Reset view
-                    </button>
-                  </div>
-                  {guidedViews.length > 0 && (
-                    <div>
-                      <p className="font-semibold text-sm">Quick looks</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {guidedViews.slice(0, 6).map((view) => (
-                          <button
-                            key={view.id}
-                            className="rounded bg-[color:var(--surface-2)] px-3 py-1 text-[11px] uppercase tracking-wide text-secondary transition hover:bg-[color:var(--surface-3)]"
-                            onClick={() => applyGuidedView(view)}
-                          >
-                            {view.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Gallery View
+              </span>
+              {activeTab === "traditional" && (
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[color:var(--brand-600)]"></div>
               )}
-            </>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm text-secondary">Preparing 3D viewer…</div>
-          )}
+            </button>
+            
+            <button
+              id="tab-immersive"
+              ref={(el) => { tabRefs.current.immersive = el }}
+              role="tab"
+              type="button"
+              aria-controls="panel-immersive"
+              aria-selected={activeTab === "immersive"}
+              tabIndex={activeTab === "immersive" ? 0 : -1}
+              onClick={() => has3DSupport && setActiveTab("immersive")}
+              disabled={!has3DSupport}
+              className={`group relative min-w-[200px] rounded-t-xl border border-b-0 px-6 py-3 text-sm font-semibold transition-all duration-200
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--surface-1)]
+                ${
+                  !has3DSupport
+                    ? "border-[color:var(--surface-border)]/30 bg-[color:var(--surface-3)] text-disabled cursor-not-allowed opacity-50"
+                    : activeTab === "immersive"
+                    ? "border-[color:var(--surface-border)] bg-[color:var(--surface-0)] text-primary shadow-[0_-2px_8px_rgba(0,0,0,0.04)] scale-[1.02] z-10"
+                    : "border-[color:var(--surface-border)]/60 bg-[color:var(--surface-2)] text-muted hover:bg-[color:var(--surface-0)]/60 hover:text-secondary hover:border-[color:var(--surface-border)]"
+                }`}
+            >
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+                </svg>
+                3D Immersive
+                {!has3DSupport && (
+                  <span className="text-xs text-disabled">(Not Available)</span>
+                )}
+              </span>
+              {activeTab === "immersive" && has3DSupport && (
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[color:var(--brand-600)]"></div>
+              )}
+            </button>
+            
+          </div>
         </div>
-        <aside className="flex h-full min-h-0 w-[360px] flex-col gap-3 overflow-y-auto border-l border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3">
-          <PanelSection title="Customize finishes" defaultOpen>
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-xs text-secondary">Choose approved materials per surface type.</p>
-              <span className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-2)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">Interactive</span>
+      </div>
+
+
+
+      {activeTab === "immersive" ? (
+      <div
+        role="tabpanel"
+        id="panel-immersive"
+        aria-labelledby="tab-immersive"
+        className="flex flex-1 min-h-0"
+      >
+        {!has3DSupport ? (
+          <div className="flex h-full w-full items-center justify-center bg-[color:var(--surface-0)]">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[color:var(--surface-2)]">
+                <svg className="h-8 w-8 text-disabled" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-primary mb-2">3D Viewer Not Available</h3>
+              <p className="text-sm text-muted mb-4">This listing doesn't support interactive 3D viewing.</p>
+              <button
+                onClick={() => setActiveTab("traditional")}
+                className="btn btn-primary"
+              >
+                Switch to Gallery View
+              </button>
             </div>
-            {selectionLoading && (
-              <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3 text-xs text-secondary">
-                Loading saved design…
-              </div>
-            )}
-            {MATERIAL_CATEGORIES.some((cat) => catalogDefaults[cat].length > 0) && (
-              <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3 text-xs text-secondary">
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Catalog defaults</div>
-                {MATERIAL_CATEGORIES.map((cat) => (
-                  <div key={cat} className="flex items-center justify-between">
-                    <span className="uppercase tracking-wide text-muted">{cat}</span>
-                    <span className="text-secondary">
-                      {catalogDefaults[cat].length ? catalogDefaults[cat].join(', ') : '—'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {MATERIAL_CATEGORIES.map((cat) => {
-              const allowedSlugs = allowedMaterials[cat] || []
-              const options = wl.filter((w) => {
-                const categoryMatches = String(w.option.category).toLowerCase() === cat
-                if (!categoryMatches) return false
-                if (!allowedSlugs.length) return true
-                return allowedSlugs.some((slug) => optionMatchesSlug(w.option, slug))
-              })
-              const totalForCategory = wl.filter((w) => String(w.option.category).toLowerCase() === cat).length
-              const restricted = allowedSlugs.length > 0 ? totalForCategory - options.length : 0
-              const active = selected[cat]
-              return (
-                <div key={cat} className="space-y-3 rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3">
-                  <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
-                    <span>{cat}</span>
-                    <span>{options.length} options</span>
-                  </div>
-                  {allowedSlugs.length > 0 && (
-                    <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2 text-[11px] text-secondary">
-                      Catalog limited to: {allowedSlugs.join(', ')}
-                      {restricted > 0 && ` (${restricted} hidden)`}
-                    </div>
+          </div>
+        ) : (
+        <div className="flex flex-1 min-h-0">
+          <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[color:var(--surface-0)]">
+            <div className="absolute right-6 top-6 z-10 flex gap-2">
+              <button
+                className={`rounded-sm border px-3 py-1 text-[10px] uppercase tracking-wide transition ${
+                  isXrMode
+                    ? 'border-emerald-400/60 bg-emerald-500/20 text-white'
+                    : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-2)]'
+                }`}
+                onClick={() => setIsXrMode((prev) => !prev)}
+              >
+                {isXrMode ? 'Exit WebXR' : 'Enter WebXR (beta)'}
+              </button>
+            </div>
+            {modelUrl ? (
+              <>
+                {isXrMode && <VRButton store={xrStore} />}
+                <Canvas
+                  className="h-full w-full"
+                  style={{ width: '100%', height: '100%' }}
+                  shadows
+                  camera={{ position: [6, 4, 8], fov: 50 }}
+                  onCreated={({ camera }) => {
+                    cameraRef.current = camera as THREE.PerspectiveCamera
+                  }}
+                >
+                  <ambientLight intensity={0.6} />
+                  <directionalLight position={[5, 10, 5]} intensity={0.9} castShadow />
+                  <Environment preset="city" />
+                  {isXrMode ? (
+                    <XR store={xrStore}>
+                      <Model url={modelUrl} onCategorized={handleCategorized} />
+                    </XR>
+                  ) : (
+                    <Model url={modelUrl} onCategorized={handleCategorized} />
                   )}
-                  <div className="space-y-2">
-                    {options.map((w) => {
-                      const unitPrice = w.overridePrice ?? w.option.price
-                      const isActive = active === w.optionId
-                      return (
-                        <button
-                          key={w.id}
-                          onClick={() => applyMaterial(cat, w.optionId)}
-                          className={`flex w-full items-center justify-between rounded-sm border px-3 py-2 text-left transition ${
-                            isActive
-                              ? 'border-brand-strong bg-brand-soft shadow-[0_10px_30px_rgba(0,0,0,0.08)]'
-                              : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] hover:border-brand hover:bg-brand-soft'
-                          }`}
-                        >
-                          <div>
-                            <div className="text-sm font-semibold text-primary">{w.option.name}</div>
-                            <div className="text-[11px] text-muted">{w.option.unit}</div>
-                          </div>
-                          <div className="text-sm font-semibold text-primary">{renderPrice(unitPrice)}</div>
-                        </button>
-                      )
-                    })}
-                    {options.length === 0 && (
-                      <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-3 text-xs text-muted">
-                        No materials approved for this surface yet.
+                  {!isXrMode && (
+                    <OrbitControls
+                      ref={(value) => {
+                        controlsRef.current = value as OrbitControlsImpl | null
+                      }}
+                      enableDamping
+                      dampingFactor={0.05}
+                    />
+                  )}
+                </Canvas>
+                {!isXrMode && (
+                  <div className="absolute top-4 left-4 z-10 space-y-3 rounded-lg bg-white/95 p-3 text-xs text-gray-700 shadow-lg max-w-xs">
+                    <div>
+                      <p className="font-semibold text-sm">Move around</p>
+                      <ul className="mt-2 space-y-1">
+                        <li>• Click and drag to look around</li>
+                        <li>• Right-click and drag to slide sideways</li>
+                        <li>• Scroll to zoom in or out</li>
+                        <li>• Tap once, then drag on touch screens</li>
+                      </ul>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded bg-[color:var(--brand-600)] px-3 py-1 text-[11px] uppercase tracking-wide text-white transition hover:bg-[color:var(--brand-500)]"
+                        onClick={resetView}
+                      >
+                        Reset view
+                      </button>
+                    </div>
+                    {guidedViews.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-sm">Quick looks</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {guidedViews.slice(0, 6).map((view) => (
+                            <button
+                              key={view.id}
+                              className="rounded bg-[color:var(--surface-2)] px-3 py-1 text-[11px] uppercase tracking-wide text-secondary transition hover:bg-[color:var(--surface-3)]"
+                              onClick={() => applyGuidedView(view)}
+                            >
+                              {view.name}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
-              )
-            })}
-          </PanelSection>
-
-          <PanelSection title="Investment preview" defaultOpen>
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs uppercase tracking-wide text-muted">Total with selections</span>
-              <span className="text-2xl font-semibold text-primary">{renderPrice(totalPriceEtb)}</span>
-            </div>
-            <div className="text-[11px] text-secondary">
-              Includes base price {renderPrice(basePriceEtb)} and selected finish upgrades.
-            </div>
-            <div className="text-[10px] text-disabled">
-              Rates sourced from Commercial Bank of Ethiopia. Default view shows ETB conversion.
-            </div>
-            {isPriceStale && (
-              <div className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-[11px] text-yellow-100">
-                Adjustments not saved yet — totals reflect approximate preview.
-              </div>
+                )}
+              </>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-sm text-secondary">Preparing 3D viewer…</div>
             )}
-          </PanelSection>
-
-          {breakdown && (
-            <PanelSection title="Pricing breakdown" defaultOpen>
-              <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-muted">
-                <span>Base price</span>
-                <span>{renderPrice(breakdown.basePrice)}</span>
+          </div>
+          <aside className="flex h-full min-h-0 w-[360px] flex-col gap-3 overflow-y-auto border-l border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3">
+            <PanelSection title="Customize finishes" defaultOpen>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-secondary">Choose approved materials per surface type.</p>
+                <span className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-2)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">Interactive</span>
               </div>
-              {breakdown.lineItems.length > 0 ? (
-                <div className="space-y-2 text-secondary">
-                  {breakdown.lineItems.map((item) => (
-                    <div key={`${item.category}-${item.optionId}`} className="flex items-center justify-between gap-3">
-                      <span className="text-[11px] uppercase tracking-wide text-muted">{item.category}</span>
-                      <div className="flex flex-col items-end text-right">
-                        <span className="text-sm text-primary">{item.optionName}</span>
-                        <span className="text-[11px] text-disabled">
-                          {renderPrice(item.unitPrice)} × {item.quantity}
-                        </span>
-                      </div>
-                      <span className="text-sm font-medium text-primary">{renderPrice(item.subtotal)}</span>
+              {selectionLoading && (
+                <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3 text-xs text-secondary">
+                  Loading saved design…
+                </div>
+              )}
+              {MATERIAL_CATEGORIES.some((cat) => catalogDefaults[cat].length > 0) && (
+                <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3 text-xs text-secondary">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Catalog defaults</div>
+                  {MATERIAL_CATEGORIES.map((cat) => (
+                    <div key={cat} className="flex items-center justify-between">
+                      <span className="uppercase tracking-wide text-muted">{cat}</span>
+                      <span className="text-secondary">
+                        {catalogDefaults[cat].length ? catalogDefaults[cat].join(', ') : '—'}
+                      </span>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-xs text-muted">No upgrades selected.</div>
               )}
-              <div className="border-t border-[color:var(--surface-border)] pt-2 text-primary">
-                <div className="flex items-center justify-between text-sm text-secondary">
-                  <span>Upgrades total</span>
-                  <span>{renderPrice(breakdown.addonTotal)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm font-semibold text-primary">
-                  <span>Total with upgrades</span>
-                  <span>{renderPrice(breakdown.priceTotal)}</span>
-                </div>
-                {breakdown.savedAt && (
-                  <div className="pt-1 text-[11px] text-disabled">
-                    Saved {new Date(breakdown.savedAt).toLocaleString()}
-                  </div>
-                )}
-              </div>
-            </PanelSection>
-          )}
-
-          {history.length > 0 && (
-            <PanelSection title="Saved history" defaultOpen={false}>
-              <div className="space-y-2">
-                {history.map((entry, index) => {
-                  const timestamp = entry.savedAt ? new Date(entry.savedAt) : null
-                  const canPreview = entry.selections && Object.keys(entry.selections).length > 0
-                  const handlePreview = () => {
-                    if (!canPreview) return
-                    const nextSelections = entry.selections ?? {}
-                    setSelected(nextSelections)
-                    setPrice(entry.priceTotal)
-                    setPriceDetails({ ...entry, selections: nextSelections })
-                    setIsPriceStale(true)
-                    setStatus('Preview loaded from history — save to commit changes')
-                  }
-                  return (
-                    <div key={entry.savedAt ?? index} className="rounded border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3 text-secondary">
-                      <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
-                        <span>{timestamp ? timestamp.toLocaleString() : 'Unknown timestamp'}</span>
-                        <span>{renderPrice(entry.priceTotal)}</span>
+              {MATERIAL_CATEGORIES.map((cat) => {
+                const allowedSlugs = allowedMaterials[cat] || []
+                const options = wl.filter((w) => {
+                  const categoryMatches = String(w.option.category).toLowerCase() === cat
+                  if (!categoryMatches) return false
+                  if (!allowedSlugs.length) return true
+                  return allowedSlugs.some((slug) => optionMatchesSlug(w.option, slug))
+                })
+                const totalForCategory = wl.filter((w) => String(w.option.category).toLowerCase() === cat).length
+                const restricted = allowedSlugs.length > 0 ? totalForCategory - options.length : 0
+                const active = selected[cat]
+                return (
+                  <div key={cat} className="space-y-3 rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
+                      <span>{cat}</span>
+                      <span>{options.length} options</span>
+                    </div>
+                    {allowedSlugs.length > 0 && (
+                      <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2 text-[11px] text-secondary">
+                        Catalog limited to: {allowedSlugs.join(', ')}
+                        {restricted > 0 && ` (${restricted} hidden)`}
                       </div>
-                      {typeof entry.priceDifference === 'number' && entry.priceDifference !== 0 && (
-                        <div className={`text-[11px] ${entry.priceDifference > 0 ? 'text-yellow-500' : 'text-emerald-600'}`}>
-                          Pricing adjustment vs recorded total: {renderPrice(entry.priceDifference)}
+                    )}
+                    <div className="space-y-2">
+                      {options.map((w) => {
+                        const unitPrice = w.overridePrice ?? w.option.price
+                        const isActive = active === w.optionId
+                        return (
+                          <button
+                            key={w.id}
+                            onClick={() => applyMaterial(cat, w.optionId)}
+                            className={`flex w-full items-center justify-between rounded-sm border px-3 py-2 text-left transition ${
+                              isActive
+                                ? 'border-brand-strong bg-brand-soft shadow-[0_10px_30px_rgba(0,0,0,0.08)]'
+                                : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] hover:border-brand hover:bg-brand-soft'
+                            }`}
+                          >
+                            <div>
+                              <div className="text-sm font-semibold text-primary">{w.option.name}</div>
+                              <div className="text-[11px] text-muted">{w.option.unit}</div>
+                            </div>
+                            <div className="text-sm font-semibold text-primary">{renderPrice(unitPrice)}</div>
+                          </button>
+                        )
+                      })}
+                      {options.length === 0 && (
+                        <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-3 text-xs text-muted">
+                          No materials approved for this surface yet.
                         </div>
                       )}
-                      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
-                        {entry.lineItems.map((item) => (
-                          <span key={`${item.category}-${item.optionId}`} className="rounded bg-[color:var(--surface-2)] px-2 py-1 text-secondary">
-                            {item.category}: {item.optionName}
-                          </span>
-                        ))}
-                        {entry.lineItems.length === 0 && <span>No upgrades selected</span>}
-                      </div>
-                      <div className="mt-3 text-right">
-                        <button
-                          onClick={handlePreview}
-                          disabled={!canPreview}
-                          className="rounded border border-[color:var(--surface-border)] px-3 py-1 text-xs font-semibold text-primary transition hover:border-brand disabled:opacity-40"
-                        >
-                          Preview selection
-                        </button>
-                      </div>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
             </PanelSection>
-          )}
 
-          <button
-            className="rounded-md border border-[color:var(--brand-600-70)] bg-[color:var(--brand-600)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--brand-500)] disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={save}
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving…' : isAuthenticated ? 'Save design' : 'Login to save'}
-          </button>
-        </aside>
+            <PanelSection title="Investment preview" defaultOpen>
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs uppercase tracking-wide text-muted">Total with selections</span>
+                <span className="text-2xl font-semibold text-primary">{renderPrice(totalPriceEtb)}</span>
+              </div>
+              <div className="text-[11px] text-secondary">
+                Includes base price {renderPrice(basePriceEtb)} and selected finish upgrades.
+              </div>
+              <div className="text-[10px] text-disabled">
+                Rates sourced from Commercial Bank of Ethiopia. Default view shows ETB conversion.
+              </div>
+              {isPriceStale && (
+                <div className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-[11px] text-yellow-100">
+                  Adjustments not saved yet — totals reflect approximate preview.
+                </div>
+              )}
+            </PanelSection>
+
+            {breakdown && (
+              <PanelSection title="Pricing breakdown" defaultOpen>
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-muted">
+                  <span>Base price</span>
+                  <span>{renderPrice(breakdown.basePrice)}</span>
+                </div>
+                {breakdown.lineItems.length > 0 ? (
+                  <div className="space-y-2 text-secondary">
+                    {breakdown.lineItems.map((item) => (
+                      <div key={`${item.category}-${item.optionId}`} className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] uppercase tracking-wide text-muted">{item.category}</span>
+                        <div className="flex flex-col items-end text-right">
+                          <span className="text-sm text-primary">{item.optionName}</span>
+                          <span className="text-[11px] text-disabled">
+                            {renderPrice(item.unitPrice)} × {item.quantity}
+                          </span>
+                        </div>
+                        <span className="text-sm font-medium text-primary">{renderPrice(item.subtotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted">No upgrades selected.</div>
+                )}
+                <div className="border-t border-[color:var(--surface-border)] pt-2 text-primary">
+                  <div className="flex items-center justify-between text-sm text-secondary">
+                    <span>Upgrades total</span>
+                    <span>{renderPrice(breakdown.addonTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm font-semibold text-primary">
+                    <span>Total with upgrades</span>
+                    <span>{renderPrice(breakdown.priceTotal)}</span>
+                  </div>
+                  {breakdown.savedAt && (
+                    <div className="pt-1 text-[11px] text-disabled">
+                      Saved {new Date(breakdown.savedAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </PanelSection>
+            )}
+
+            {history.length > 0 && (
+              <PanelSection title="Saved history" defaultOpen={false}>
+                <div className="space-y-2">
+                  {history.map((entry, index) => {
+                    const timestamp = entry.savedAt ? new Date(entry.savedAt) : null
+                    const canPreview = entry.selections && Object.keys(entry.selections).length > 0
+                    const handlePreview = () => {
+                      if (!canPreview) return
+                      const nextSelections = entry.selections ?? {}
+                      setSelected(nextSelections)
+                      setPrice(entry.priceTotal)
+                      setPriceDetails({ ...entry, selections: nextSelections })
+                      setIsPriceStale(true)
+                      setStatus('Preview loaded from history — save to commit changes')
+                    }
+                    return (
+                      <div key={entry.savedAt ?? index} className="rounded border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3 text-secondary">
+                        <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted">
+                          <span>{timestamp ? timestamp.toLocaleString() : 'Unknown timestamp'}</span>
+                          <span>{renderPrice(entry.priceTotal)}</span>
+                        </div>
+                        {typeof entry.priceDifference === 'number' && entry.priceDifference !== 0 && (
+                          <div className={`text-[11px] ${entry.priceDifference > 0 ? 'text-yellow-500' : 'text-emerald-600'}`}>
+                            Pricing adjustment vs recorded total: {renderPrice(entry.priceDifference)}
+                          </div>
+                        )}
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
+                          {entry.lineItems.map((item) => (
+                            <span key={`${item.category}-${item.optionId}`} className="rounded bg-[color:var(--surface-2)] px-2 py-1 text-secondary">
+                              {item.category}: {item.optionName}
+                            </span>
+                          ))}
+                          {entry.lineItems.length === 0 && <span>No upgrades selected</span>}
+                        </div>
+                        <div className="mt-3 text-right">
+                          <button
+                            onClick={handlePreview}
+                            disabled={!canPreview}
+                            className="rounded border border-[color:var(--surface-border)] px-3 py-1 text-xs font-semibold text-primary transition hover:border-brand disabled:opacity-40"
+                          >
+                            Preview selection
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </PanelSection>
+            )}
+
+            <button
+              className="rounded-md border border-[color:var(--brand-600-70)] bg-[color:var(--brand-600)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--brand-500)] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={save}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving…' : isAuthenticated ? 'Save design' : 'Login to save'}
+            </button>
+          </aside>
+        </div>
+  
+        )}
       </div>
+        
+      ): (
+      <div
+        role="tabpanel"
+        id="panel-traditional"
+        aria-labelledby="tab-traditional"
+        className="flex flex-1 min-h-0"
+      >
+        
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 overflow-auto bg-[color:var(--surface-0)]">
+            <TraditionalViewer />
+          </div>
+        </div>
+      </div>
+        
+      )}
+      
     </div>
   )
 }

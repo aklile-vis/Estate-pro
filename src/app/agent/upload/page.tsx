@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import {
   ArrowUpOnSquareIcon,
@@ -92,6 +92,8 @@ export default function AgentUploadPage() {
   const isAgent = user?.role === 'AGENT' || user?.role === 'ADMIN'
   const [media, setMedia] = useState<MediaItem[]>([])
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const [immersiveEnabled, setImmersiveEnabled] = useState<boolean>(false)
+
 
   const aiRooms = useMemo<AIRoom[]>(() => {
     if (!Array.isArray(aiInsights?.rooms)) return []
@@ -555,7 +557,7 @@ export default function AgentUploadPage() {
         images: images.map((m) => m.url),
         videos: videos.map((v) => ({ url: v.url, label: v.file?.name || 'Video clip' })),
       },
-      immersive: { has3D: false },
+      immersive: { has3D: immersiveEnabled },
     }
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
@@ -563,7 +565,7 @@ export default function AgentUploadPage() {
       /* ignore storage errors */
     }
     router.push('/agent/review')
-  }, [form.title, form.basePrice, form.currency, form.address, form.city, form.bedrooms, form.bathrooms, form.areaSqm, form.description, propertyType, images, videos, router])
+  }, [form.title, form.basePrice, form.currency, form.address, form.city, form.bedrooms, form.bathrooms, form.areaSqm, form.description, propertyType, images, videos, immersiveEnabled, router])
 
   // Hydrate form state only when returning via Review CTA (restore=1)
   useEffect(() => {
@@ -1068,6 +1070,305 @@ export default function AgentUploadPage() {
         </section>
       </div>
 
+      {/* Immersive viewer toggle */}
+      <div className="container pt-4">
+        <div className="surface-soft flex items-center justify-between rounded-2xl border border-[color:var(--surface-border)] p-5">
+          <div>
+            <p className="text-sm font-semibold text-primary">Enable Immersive (3D) pipeline</p>
+            <p className="text-xs text-muted">
+              When enabled, you can upload CAD/3D and generate IFC/GLB for the immersive viewer.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setImmersiveEnabled(v => !v)}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${
+              immersiveEnabled ? 'bg-[color:var(--accent-500)]' : 'bg-[color:var(--surface-3)]'
+            }`}
+            aria-pressed={immersiveEnabled}
+            aria-label="Toggle immersive pipeline"
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+                immersiveEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* 3D upload & processing */}
+      {immersiveEnabled && (
+        <div className="container space-y-10 py-12">
+          <header className="space-y-3 text-center">
+            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">
+              <CloudArrowUpIcon className="h-4 w-4" /> Design file → immersive pipeline
+            </div>
+            <h1 className="headline text-4xl">Upload CAD, generate immersive assets</h1>
+            <p className="mx-auto max-w-2xl text-base text-muted">
+              The agent pipeline ingests architectural drawings or authored BIM, generates IFC/GLB/USD outputs, and
+              persists topology, AI insights, and material metadata so listings are ready for interactive customization.
+            </p>
+          </header>
+
+          <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="surface-soft space-y-6 p-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-wide text-muted">Upload design or 3D source</p>
+                  <p className="text-secondary">Drag & drop IFC, RVT, DXF/DWG, GLB/GLTF, OBJ/FBX/BLEND, SKP, or packaged ZIP files up to {formatBytes(MAX_SIZE)}.</p>
+                </div>
+                <label
+                  className="btn btn-primary cursor-pointer"
+                >
+                  <ArrowUpOnSquareIcon className="h-4 w-4" />
+                  <span>Select CAD / 3D file</span>
+                  <input
+                    type="file"
+                    accept=".ifc,.ifcxml,.dxf,.dwg,.glb,.gltf,.obj,.fbx,.skp,.blend,.zip,.rvt"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (file) handleSelect(file)
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 text-sm">
+                <div className="flex items-center gap-3 text-muted">
+                  {stage === 'done' ? (
+                    <CheckCircleIcon className="h-5 w-5 text-[color:var(--success-500)]" />
+                  ) : stage === 'error' ? (
+                    <ExclamationTriangleIcon className="h-5 w-5 text-[color:var(--warning-500)]" />
+                  ) : (
+                    <PlayCircleIcon className="h-5 w-5 animate-pulse text-[color:var(--accent-500)]" />
+                  )}
+                  <div>
+                    <div className="font-medium text-primary">
+                      {busyLabel || message}
+                    </div>
+                    <div className="text-xs uppercase tracking-wide text-disabled">
+                      {stage.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+                {error && (
+                  <p className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-red-100">{error}</p>
+                )}
+              </div>
+
+              {upload && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+                    <p className="text-xs uppercase tracking-widest text-muted">Source file</p>
+                    <p className="mt-1 text-sm font-medium text-primary">{upload.name}</p>
+                    <p className="text-xs text-disabled">{formatBytes(upload.size)} • id {upload.fileId}</p>
+                  </div>
+                  {result && (
+                    <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+                      <p className="text-xs uppercase tracking-widest text-muted">Elements detected</p>
+                      <p className="mt-1 text-3xl font-semibold text-primary">{result.elementsCount ?? 0}</p>
+                      <p className="text-xs text-disabled">Floors, walls, spaces & more surfaced during processing</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {result && (
+                <div className="space-y-3 text-sm text-muted">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
+                    <LinkIcon className="h-4 w-4" /> Next steps
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {savedUnitId && (
+                      <Link href={`/agent/editor/${encodeURIComponent(savedUnitId)}`} className="btn btn-primary">
+                        <CubeIcon className="h-4 w-4" /> Edit in 3D Editor
+                      </Link>
+                    )}
+                    {topologyPath && (
+                      <Link
+                        href={`/api/files/binary?path=${encodeURIComponent(topologyPath)}`}
+                        className="btn btn-secondary"
+                        target="_blank"
+                      >
+                        Topology JSON
+                      </Link>
+                    )}
+                    {result?.usdPath && (
+                      <Link
+                        href={`/api/files/binary?path=${encodeURIComponent(result.usdPath)}`}
+                        className="btn btn-secondary"
+                      >
+                        USD Asset
+                      </Link>
+                    )}
+                  </div>
+                  {!savedUnitId && (
+                    <p className="text-xs text-muted">
+                      The editor opens automatically once the processed unit is saved. Please retry the ingest step if no
+                      editor link appears.
+                    </p>
+                  )}
+                  {result.usdError && (
+                    <p className="text-xs text-amber-200">
+                      USD export warning: {result.usdError}
+                    </p>
+                  )}
+
+                  {result?.lodReport
+                    ? (() => {
+                        const lod = (result.lodReport as Record<string, any>) || {}
+                        const lodCategory = typeof lod.lod === 'string' ? lod.lod : 'unknown'
+                        const coverage =
+                          typeof lod.materialCoverage === 'number'
+                            ? `${(lod.materialCoverage * 100).toFixed(0)}%`
+                            : '—'
+                        return (
+                          <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 text-xs text-muted">
+                            <p className="text-xs uppercase tracking-wide text-muted">LOD inspection</p>
+                            <p className="mt-1 text-sm font-semibold text-primary">{lodCategory.toUpperCase()}</p>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-disabled">Detail score</div>
+                                <div className="text-sm text-secondary">{lod.detailScore ?? '—'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-disabled">Material coverage</div>
+                                <div className="text-sm text-secondary">{coverage}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-disabled">Elements</div>
+                                <div className="text-sm text-secondary">{lod.elementCount ?? '—'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-disabled">With geometry</div>
+                                <div className="text-sm text-secondary">{lod.elementsWithGeometry ?? '—'}</div>
+                              </div>
+                            </div>
+                            {lod.needs_enrichment && (
+                              <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                                Autofilled catalog materials were applied to lift photorealism for this IFC.
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })()
+                    : null}
+                </div>
+              )}
+
+              {aiInsights
+                ? (() => {
+                    const insights = aiInsights as Record<string, unknown>
+                    return (
+                      <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-5 text-sm text-muted space-y-4">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
+                          <DocumentTextIcon className="h-4 w-4" /> AI layout briefing
+                        </div>
+                        {aiRooms.length > 0 && (
+                          <div>
+                            <p className="text-xs text-muted mb-1">Rooms</p>
+                            <ul className="space-y-1 text-xs">
+                              {aiRooms.map((room, idx) => (
+                                <li key={room?.id || idx} className="rounded-lg border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2">
+                                  <div className="font-semibold text-secondary">{room?.type || room?.id || 'room'}</div>
+                                  {room?.default_materials && (
+                                    <div className="mt-1 grid grid-cols-2 gap-1 text-muted">
+                                      {Object.entries(room.default_materials).map(([slot, value]) => (
+                                        <span key={slot}>{slot}: {String(value)}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {room?.notes && <p className="mt-1 text-muted">{room.notes}</p>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {aiCameras.length > 0 && (
+                          <div>
+                            <p className="text-xs text-muted mb-1">Suggested cameras</p>
+                            <ul className="space-y-1 text-xs">
+                              {aiCameras.map((cam, idx) => (
+                                <li key={cam?.name || idx} className="rounded-lg border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2">
+                                  <div className="font-semibold text-secondary">{cam?.name || `camera_${idx}`}</div>
+                                  <div className="mt-1 text-muted">pos: {JSON.stringify(cam?.position)}</div>
+                                  <div className="text-muted">look_at: {JSON.stringify(cam?.look_at || cam?.lookAt)}</div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()
+                : null}
+
+              {stage === 'done' && (
+                <div className="rounded-2xl border border-[color:var(--success-500)]/40 bg-[color:var(--success-500)]/12 p-5 text-sm text-primary">
+                  <p className="font-semibold text-[color:var(--success-500)]">Pipeline complete.</p>
+                  <p className="mt-1 text-secondary">
+                    Geometry checks, AI enrichment, and catalog defaults are complete. Assets are registered and ready for
+                    the editor, pricing tools, and public listings.
+                  </p>
+                  {savedModelId && (
+                    <p className="mt-2 text-xs text-secondary">
+                      Registered model id:
+                      <code className="ml-1 rounded bg-[color:var(--success-500)]/20 px-1 text-[color:var(--success-500)]">
+                        {savedModelId}
+                      </code>
+                    </p>
+                  )}
+                  {savedUnitId && (
+                    <p className="text-xs text-secondary">
+                      Property unit id:
+                      <code className="ml-1 rounded bg-[color:var(--success-500)]/20 px-1 text-[color:var(--success-500)]">
+                        {savedUnitId}
+                      </code>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={reset}
+                disabled={isBusy}
+              >
+                Reset session
+              </button>
+            </div>
+
+            <aside className="space-y-4">
+              <div className="surface-soft space-y-3 p-5 text-sm text-muted">
+                <p className="text-xs uppercase tracking-wide text-muted">Pipeline steps</p>
+                <ol className="space-y-2 text-xs text-muted">
+                  <li>1. Upload design intent (IFC, CAD, mesh, or bundled package).</li>
+                  <li>2. Normalise geometry, infer spaces, and validate structure.</li>
+                  <li>3. Generate or refine IFC with openings, relationships, and materials.</li>
+                  <li>4. Emit photorealistic GLB/USD assets with catalog-ready materials.</li>
+                  <li>5. Persist topology, AI insights, and manifest metadata.</li>
+                </ol>
+              </div>
+
+              <div className="surface-soft space-y-3 p-5 text-sm text-muted">
+                <p className="text-xs uppercase tracking-wide text-muted">Need to manage existing uploads?</p>
+                <div className="flex flex-col gap-2">
+                  <Link href="/agent/unified-upload" className="btn btn-secondary">
+                    Power tools workspace
+                  </Link>
+                  <Link href="/agent/units" className="btn btn-secondary">
+                    Go to units
+                  </Link>
+                </div>
+              </div>
+            </aside>
+          </section>
+        </div>
+      )}
+      
       {/* CTA: continue to read-only review (no 3D flow) */}
       <div className="container py-4">
         <div className="flex items-center justify-end gap-3">
@@ -1094,276 +1395,6 @@ export default function AgentUploadPage() {
             Continue to review (no 3D)
           </button>
         </div>
-      </div>
-
-      {/* 3D upload & processing */}
-      <div className="container space-y-10 py-12">
-        <header className="space-y-3 text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">
-            <CloudArrowUpIcon className="h-4 w-4" /> Design file → immersive pipeline
-          </div>
-          <h1 className="headline text-4xl">Upload CAD, generate immersive assets</h1>
-          <p className="mx-auto max-w-2xl text-base text-muted">
-            The agent pipeline ingests architectural drawings or authored BIM, generates IFC/GLB/USD outputs, and
-            persists topology, AI insights, and material metadata so listings are ready for interactive customization.
-          </p>
-        </header>
-
-        <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="surface-soft space-y-6 p-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-muted">Upload design or 3D source</p>
-                <p className="text-secondary">Drag & drop IFC, RVT, DXF/DWG, GLB/GLTF, OBJ/FBX/BLEND, SKP, or packaged ZIP files up to {formatBytes(MAX_SIZE)}.</p>
-              </div>
-              <label
-                className="btn btn-primary cursor-pointer"
-              >
-                <ArrowUpOnSquareIcon className="h-4 w-4" />
-                <span>Select CAD / 3D file</span>
-                <input
-                  type="file"
-                  accept=".ifc,.ifcxml,.dxf,.dwg,.glb,.gltf,.obj,.fbx,.skp,.blend,.zip,.rvt"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (file) handleSelect(file)
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 text-sm">
-              <div className="flex items-center gap-3 text-muted">
-                {stage === 'done' ? (
-                  <CheckCircleIcon className="h-5 w-5 text-[color:var(--success-500)]" />
-                ) : stage === 'error' ? (
-                  <ExclamationTriangleIcon className="h-5 w-5 text-[color:var(--warning-500)]" />
-                ) : (
-                  <PlayCircleIcon className="h-5 w-5 animate-pulse text-[color:var(--accent-500)]" />
-                )}
-                <div>
-                  <div className="font-medium text-primary">
-                    {busyLabel || message}
-                  </div>
-                  <div className="text-xs uppercase tracking-wide text-disabled">
-                    {stage.toUpperCase()}
-                  </div>
-                </div>
-              </div>
-              {error && (
-                <p className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-red-100">{error}</p>
-              )}
-            </div>
-
-            {upload && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
-                  <p className="text-xs uppercase tracking-widest text-muted">Source file</p>
-                  <p className="mt-1 text-sm font-medium text-primary">{upload.name}</p>
-                  <p className="text-xs text-disabled">{formatBytes(upload.size)} • id {upload.fileId}</p>
-                </div>
-                {result && (
-                  <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
-                    <p className="text-xs uppercase tracking-widest text-muted">Elements detected</p>
-                    <p className="mt-1 text-3xl font-semibold text-primary">{result.elementsCount ?? 0}</p>
-                    <p className="text-xs text-disabled">Floors, walls, spaces & more surfaced during processing</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {result && (
-              <div className="space-y-3 text-sm text-muted">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
-                  <LinkIcon className="h-4 w-4" /> Next steps
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {savedUnitId && (
-                    <Link href={`/agent/editor/${encodeURIComponent(savedUnitId)}`} className="btn btn-primary">
-                      <CubeIcon className="h-4 w-4" /> Edit in 3D Editor
-                    </Link>
-                  )}
-                  {topologyPath && (
-                    <Link
-                      href={`/api/files/binary?path=${encodeURIComponent(topologyPath)}`}
-                      className="btn btn-secondary"
-                      target="_blank"
-                    >
-                      Topology JSON
-                    </Link>
-                  )}
-                  {result?.usdPath && (
-                    <Link
-                      href={`/api/files/binary?path=${encodeURIComponent(result.usdPath)}`}
-                      className="btn btn-secondary"
-                    >
-                      USD Asset
-                    </Link>
-                  )}
-                </div>
-                {!savedUnitId && (
-                  <p className="text-xs text-muted">
-                    The editor opens automatically once the processed unit is saved. Please retry the ingest step if no
-                    editor link appears.
-                  </p>
-                )}
-                {result.usdError && (
-                  <p className="text-xs text-amber-200">
-                    USD export warning: {result.usdError}
-                  </p>
-                )}
-
-                {result?.lodReport
-                  ? (() => {
-                      const lod = (result.lodReport as Record<string, any>) || {}
-                      const lodCategory = typeof lod.lod === 'string' ? lod.lod : 'unknown'
-                      const coverage =
-                        typeof lod.materialCoverage === 'number'
-                          ? `${(lod.materialCoverage * 100).toFixed(0)}%`
-                          : '—'
-                      return (
-                        <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 text-xs text-muted">
-                          <p className="text-xs uppercase tracking-wide text-muted">LOD inspection</p>
-                          <p className="mt-1 text-sm font-semibold text-primary">{lodCategory.toUpperCase()}</p>
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            <div>
-                              <div className="text-[11px] uppercase tracking-wide text-disabled">Detail score</div>
-                              <div className="text-sm text-secondary">{lod.detailScore ?? '—'}</div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] uppercase tracking-wide text-disabled">Material coverage</div>
-                              <div className="text-sm text-secondary">{coverage}</div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] uppercase tracking-wide text-disabled">Elements</div>
-                              <div className="text-sm text-secondary">{lod.elementCount ?? '—'}</div>
-                            </div>
-                            <div>
-                              <div className="text-[11px] uppercase tracking-wide text-disabled">With geometry</div>
-                              <div className="text-sm text-secondary">{lod.elementsWithGeometry ?? '—'}</div>
-                            </div>
-                          </div>
-                          {lod.needs_enrichment && (
-                            <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
-                              Autofilled catalog materials were applied to lift photorealism for this IFC.
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })()
-                  : null}
-              </div>
-            )}
-
-            {aiInsights
-              ? (() => {
-                  const insights = aiInsights as Record<string, unknown>
-                  return (
-                    <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-5 text-sm text-muted space-y-4">
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
-                        <DocumentTextIcon className="h-4 w-4" /> AI layout briefing
-                      </div>
-                      {aiRooms.length > 0 && (
-                        <div>
-                          <p className="text-xs text-muted mb-1">Rooms</p>
-                          <ul className="space-y-1 text-xs">
-                            {aiRooms.map((room, idx) => (
-                              <li key={room?.id || idx} className="rounded-lg border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2">
-                                <div className="font-semibold text-secondary">{room?.type || room?.id || 'room'}</div>
-                                {room?.default_materials && (
-                                  <div className="mt-1 grid grid-cols-2 gap-1 text-muted">
-                                    {Object.entries(room.default_materials).map(([slot, value]) => (
-                                      <span key={slot}>{slot}: {String(value)}</span>
-                                    ))}
-                                  </div>
-                                )}
-                                {room?.notes && <p className="mt-1 text-muted">{room.notes}</p>}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {aiCameras.length > 0 && (
-                        <div>
-                          <p className="text-xs text-muted mb-1">Suggested cameras</p>
-                          <ul className="space-y-1 text-xs">
-                            {aiCameras.map((cam, idx) => (
-                              <li key={cam?.name || idx} className="rounded-lg border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2">
-                                <div className="font-semibold text-secondary">{cam?.name || `camera_${idx}`}</div>
-                                <div className="mt-1 text-muted">pos: {JSON.stringify(cam?.position)}</div>
-                                <div className="text-muted">look_at: {JSON.stringify(cam?.look_at || cam?.lookAt)}</div>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()
-              : null}
-
-            {stage === 'done' && (
-              <div className="rounded-2xl border border-[color:var(--success-500)]/40 bg-[color:var(--success-500)]/12 p-5 text-sm text-primary">
-                <p className="font-semibold text-[color:var(--success-500)]">Pipeline complete.</p>
-                <p className="mt-1 text-secondary">
-                  Geometry checks, AI enrichment, and catalog defaults are complete. Assets are registered and ready for
-                  the editor, pricing tools, and public listings.
-                </p>
-                {savedModelId && (
-                  <p className="mt-2 text-xs text-secondary">
-                    Registered model id:
-                    <code className="ml-1 rounded bg-[color:var(--success-500)]/20 px-1 text-[color:var(--success-500)]">
-                      {savedModelId}
-                    </code>
-                  </p>
-                )}
-                {savedUnitId && (
-                  <p className="text-xs text-secondary">
-                    Property unit id:
-                    <code className="ml-1 rounded bg-[color:var(--success-500)]/20 px-1 text-[color:var(--success-500)]">
-                      {savedUnitId}
-                    </code>
-                  </p>
-                )}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={reset}
-              disabled={isBusy}
-            >
-              Reset session
-            </button>
-          </div>
-
-          <aside className="space-y-4">
-            <div className="surface-soft space-y-3 p-5 text-sm text-muted">
-              <p className="text-xs uppercase tracking-wide text-muted">Pipeline steps</p>
-              <ol className="space-y-2 text-xs text-muted">
-                <li>1. Upload design intent (IFC, CAD, mesh, or bundled package).</li>
-                <li>2. Normalise geometry, infer spaces, and validate structure.</li>
-                <li>3. Generate or refine IFC with openings, relationships, and materials.</li>
-                <li>4. Emit photorealistic GLB/USD assets with catalog-ready materials.</li>
-                <li>5. Persist topology, AI insights, and manifest metadata.</li>
-              </ol>
-            </div>
-
-            <div className="surface-soft space-y-3 p-5 text-sm text-muted">
-              <p className="text-xs uppercase tracking-wide text-muted">Need to manage existing uploads?</p>
-              <div className="flex flex-col gap-2">
-                <Link href="/agent/unified-upload" className="btn btn-secondary">
-                  Power tools workspace
-                </Link>
-                <Link href="/agent/units" className="btn btn-secondary">
-                  Go to units
-                </Link>
-              </div>
-            </div>
-          </aside>
-        </section>
       </div>
     </div>
   )

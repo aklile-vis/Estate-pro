@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       basePrice,
       currency,
       coverImage: body.coverImage ?? null,
+      has3D: body.immersive?.has3D ?? false,
       // Default to not published, agent can publish explicitly
       isPublished: body.isPublished ?? false, 
     }
@@ -68,11 +69,32 @@ export async function POST(request: NextRequest) {
       if (!glbPath) {
         return NextResponse.json({ error: 'Model is not processed yet. Generate GLB before publishing.' }, { status: 400 })
       }
+      
+      // Update editorState with immersive data if provided
+      if (body.immersive) {
+        const editorState = {
+          ...(unit.editorState as any || {}),
+          immersive: {
+            has3D: body.immersive.has3D || false,
+          }
+        }
+        await prisma.propertyUnit.update({
+          where: { id: targetUnitId },
+          data: { editorState }
+        })
+      }
     } else {
       // If no unitId, create a new PropertyUnit for this listing
+      const editorState = body.immersive ? {
+        immersive: {
+          has3D: body.immersive.has3D || false,
+        }
+      } : null
+
       const newUnit = await prisma.propertyUnit.create({
         data: {
           name: listingData.title, // Use title as the name for PropertyUnit
+          editorState: editorState,
         },
       })
       targetUnitId = newUnit.id

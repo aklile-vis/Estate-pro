@@ -200,6 +200,7 @@ model UnitListing {
   basePrice   Float        @default(0)
   currency    String       @default("ETB")
   coverImage  String?
+  has3D       Boolean      @default(false)
   isPublished Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
