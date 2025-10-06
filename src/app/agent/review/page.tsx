@@ -15,6 +15,7 @@ import {
   PlayCircleIcon,
   TagIcon,
 } from "@heroicons/react/24/outline"
+import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid'
 
 const mockListing = {
   title: "Luxury Smart Condo",
@@ -105,6 +106,49 @@ export default function AgentListingReviewPage() {
       // ignore parse/storage errors
     }
   }, [])
+
+  // Build absolute URLs for stored paths
+  const toAbsolute = (url: string) => (url?.startsWith('http') ? url : `/api/files/binary?path=${encodeURIComponent(url)}`)
+
+// Lightbox state
+  type Viewer = { type: 'image' | 'video'; index: number } | null
+  const [viewer, setViewer] = useState<Viewer>(null)
+
+  const closeViewer = () => setViewer(null)
+  const nextViewer = () => {
+    if (!viewer) return
+    const list = viewer.type === 'image' ? media.images : media.videos
+    if (!list?.length) return
+    setViewer({ type: viewer.type, index: (viewer.index + 1) % list.length })
+  }
+  const prevViewer = () => {
+    if (!viewer) return
+    const list = viewer.type === 'image' ? media.images : media.videos
+    if (!list?.length) return
+    setViewer({ type: viewer.type, index: (viewer.index - 1 + list.length) % list.length })
+  }
+
+  // Keyboard + scroll lock while viewer is open
+  useEffect(() => {
+    if (!viewer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeViewer(); return }
+      // Allow native seeking for videos; only hijack arrows for images
+      if (viewer.type === 'image') {
+        if (e.key === 'ArrowRight') { e.preventDefault(); nextViewer() }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); prevViewer() }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
+  }, [viewer])
+
+  const onCardKeyDown = (e: React.KeyboardEvent, open: () => void) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
+  }
+  
 
   const source = draft || mockListing
   const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, media, immersive } =
@@ -300,7 +344,7 @@ export default function AgentListingReviewPage() {
             </header>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {media.images.map((path) => {
+              {media.images.map((path, index) => {
                 console.log('Image path:', path) // Debug log
                 // Construct the proper URL for the image
                 const imageUrl = path.startsWith('http') 
@@ -311,10 +355,17 @@ export default function AgentListingReviewPage() {
                 return (
                   <figure
                     key={path}
-                    className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setViewer({ type: 'image', index })}
+                    onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'image', index }))}
+                    className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imageUrl} alt="Listing media" className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <img
+                      src={imageUrl}
+                      alt="Listing media"
+                      className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                    />
                     <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent px-3 py-2 text-xs text-white">
                       Photo asset
                     </figcaption>
@@ -324,26 +375,47 @@ export default function AgentListingReviewPage() {
             </div>
 
             {media.videos.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {media.videos.map((video) => (
-                  <div
-                    key={video.url}
-                    className="flex items-center justify-between rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--surface-2)]">
-                        <PlayCircleIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {media.videos.map((video, index) => {
+                  const videoUrl = video.url.startsWith('http')
+                    ? video.url
+                    : `/api/files/binary?path=${encodeURIComponent(video.url)}`
+
+                  return (
+                    <figure
+                      key={video.url}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setViewer({ type: 'video', index })}
+                      onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'video', index }))}
+                      className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
+                    >
+                      <video
+                        src={toAbsolute(video.url)}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                        controls={false}
+                        onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}) }}
+                        onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                      />
+                      {/* Centered play badge; fades on hover */}
+                      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white opacity-100 transition-opacity group-hover:opacity-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-10 w-10 drop-shadow">
+                          <path d="M8.25 5.75v12.5l10-6.25-10-6.25z" />
+                        </svg>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-primary">{video.label}</p>
-                        <p className="text-xs text-muted">{video.url}</p>
-                      </div>
-                    </div>
-                    <span className="text-xs uppercase tracking-wide text-disabled">Video</span>
-                  </div>
-                ))}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
+                      <figcaption className="absolute inset-x-0 bottom-0 px-3 py-2 text-xs text-white">
+                        {video.label || 'Video asset'}
+                      </figcaption>
+                    </figure>
+                  )
+                })}
               </div>
             )}
+
           </section>
 
           {/* Immersive Pipeline Status */}
@@ -382,6 +454,73 @@ export default function AgentListingReviewPage() {
               </div>
             </div>
           </section>
+
+          {/* Media viewer modal (minimal, with arrows) */}
+          {viewer && (() => {
+            const list = viewer.type === 'image' ? media.images : media.videos
+            const current = list[viewer.index]
+            const src = viewer.type === 'image' ? toAbsolute(current as string) : toAbsolute((current as {url:string}).url)
+
+            return (
+              <div
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+                role="dialog"
+                aria-modal="true"
+                onClick={closeViewer}
+              >
+                <div
+                  className="relative max-h-[90vh] w-full max-w-6xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {viewer.type === 'image' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={src} alt="" className="mx-auto max-h-[90vh] w-auto max-w-full object-contain rounded-2xl" />
+                  ) : (
+                    <video
+                      src={src}
+                      className="mx-auto max-h-[90vh] w-auto max-w-full"
+                      controls
+                      autoPlay
+                    />
+                  )}
+
+                  {/* Close (icon) */}
+                  <button
+                    type="button"
+                    onClick={closeViewer}
+                    aria-label="Close viewer"
+                    className="absolute right-2 top-2 rounded-full bg-black/70 p-2 text-white hover:bg-black/80 focus:outline-none focus:ring-2 focus:ring-white/40"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+
+                  {/* Bottom arrows */}
+                  {list.length > 1 && (
+                    <div className={`absolute inset-x-0 ${viewer.type === 'video' ? 'bottom-14' : 'bottom-3'} flex justify-center pointer-events-none`}>
+                      <div className="inline-flex items-center gap-2 rounded-full bg-black/60 px-2 py-1 pointer-events-auto">
+                        <button
+                          type="button"
+                          onClick={prevViewer}
+                          aria-label="Previous"
+                          className="rounded-full p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
+                        >
+                          <ChevronLeftIcon className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={nextViewer}
+                          aria-label="Next"
+                          className="rounded-full p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
+                        >
+                          <ChevronRightIcon className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Sidebar */}

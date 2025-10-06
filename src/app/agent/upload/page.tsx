@@ -17,7 +17,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { processCAD, uploadDesignFile } from '@/lib/backendClient'
 import { SUPPORTED_CURRENCIES } from '@/lib/utils'
-import { PhotoIcon, FilmIcon, XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { PhotoIcon, FilmIcon, XMarkIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 
 
 interface UploadSummary {
@@ -406,6 +406,63 @@ export default function AgentUploadPage() {
       return copy
     })
   }
+  const onCardKeyDown = (e: React.KeyboardEvent, open: () => void) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      open()
+    }
+  }
+  
+    // Helper to turn stored path into a usable URL
+  const toAbsolute = useCallback((url: string) => {
+    return url?.startsWith('http')
+      ? url
+      : `/api/files/binary?path=${encodeURIComponent(url)}`
+  }, [])
+
+  // Modal/lightbox viewer state
+  type Viewer = { type: 'image' | 'video'; index: number } | null
+  const [viewer, setViewer] = useState<Viewer>(null)
+
+  const closeViewer = useCallback(() => setViewer(null), [])
+
+  const nextViewer = useCallback(() => {
+    if (!viewer) return
+    const list = viewer.type === 'image' ? images : videos
+    if (!list.length) return
+    setViewer({ type: viewer.type, index: (viewer.index + 1) % list.length })
+  }, [viewer, images, videos])
+
+  const prevViewer = useCallback(() => {
+    if (!viewer) return
+    const list = viewer.type === 'image' ? images : videos
+    if (!list.length) return
+    setViewer({
+      type: viewer.type,
+      index: (viewer.index - 1 + list.length) % list.length,
+    })
+  }, [viewer, images, videos])
+
+  // Keyboard + scroll lock while viewer is open
+  useEffect(() => {
+    if (!viewer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { closeViewer(); return }
+      // Allow native seeking for videos; only hijack arrows for images
+      if (viewer.type === 'image') {
+        if (e.key === 'ArrowRight') { e.preventDefault(); nextViewer() }
+        if (e.key === 'ArrowLeft')  { e.preventDefault(); prevViewer() }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const { overflow } = document.body.style
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = overflow
+    }
+  }, [viewer, closeViewer, nextViewer, prevViewer])
+
 
   // No cleanup needed since we're using server URLs instead of blob URLs
 
@@ -993,19 +1050,34 @@ export default function AgentUploadPage() {
                       ? m.url 
                       : `/api/files/binary?path=${encodeURIComponent(m.url)}`
                     
-                    return (
-                      <div key={m.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={imageUrl} alt={m.file?.name || 'Listing image'} className="h-32 w-full object-cover" />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                        onClick={() => removeImageAt(idx)}
-                      >
-                        <XMarkIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                    )
+                      return (
+                        <div
+                          key={m.url}
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Open image"
+                          onClick={() => setViewer({ type: 'image', index: idx })}
+                          onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'image', index: idx }))}
+                          className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={toAbsolute(m.url)}
+                            alt={m.file?.name || 'Listing image'}
+                            className="h-32 w-full object-cover"
+                            loading="lazy"
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => { e.stopPropagation(); removeImageAt(idx) }}
+                            aria-label="Remove image"
+                          >
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )
+                      
                   })}
                 </div>
               )}
@@ -1050,18 +1122,32 @@ export default function AgentUploadPage() {
                       ? v.url 
                       : `/api/files/binary?path=${encodeURIComponent(v.url)}`
                     
-                    return (
-                      <div key={v.url} className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
-                        <video className="h-32 w-full object-cover" src={videoUrl} controls preload="metadata" />
-                      <button
-                        type="button"
-                        className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                        onClick={() => removeVideoAt(idx)}
-                      >
-                        <XMarkIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                    )
+                      return (
+                        <div
+                          key={v.url}
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Open video"
+                          onClick={() => setViewer({ type: 'video', index: idx })}
+                          onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'video', index: idx }))}
+                          className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
+                        >
+                          <video
+                            className="h-32 w-full object-cover"
+                            src={toAbsolute(v.url)}
+                            preload="metadata"
+                            muted
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => { e.stopPropagation(); removeVideoAt(idx) }}
+                            aria-label="Remove video"
+                          >
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )
                   })}
                 </div>
               )}
@@ -1368,6 +1454,79 @@ export default function AgentUploadPage() {
           </section>
         </div>
       )}
+
+      {/* Media viewer modal (minimal) */}
+      {viewer && (() => {
+        const list = viewer.type === 'image' ? images : videos
+        const current = list[viewer.index]
+        const src = current ? toAbsolute(current.url) : ''
+
+        return (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+            role="dialog"
+            aria-modal="true"
+            onClick={closeViewer}
+          >
+            <div
+              className="relative max-h-[90vh] w-full max-w-6xl rounded"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {viewer.type === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={src}
+                  alt=""
+                  className="mx-auto max-h-[90vh] w-auto max-w-full object-contain rounded-2xl"
+                />
+              ) : (
+                <video
+                  src={src}
+                  className="mx-auto max-h-[90vh] w-auto max-w-full"
+                  controls
+                  autoPlay
+                />
+              )}
+
+              {/* Close (icon only) */}
+              <button
+                type="button"
+                onClick={closeViewer}
+                aria-label="Close viewer"
+                className="absolute right-2 top-2 rounded-full bg-black/70 p-2 text-white
+                          hover:bg-black/80 focus:outline-none focus:ring-2 focus:ring-white/40"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+              {/* Bottom navigation (only if multiple media) */}
+              {list.length > 1 && (
+                <div className="absolute inset-x-0 bottom-3 flex justify-center">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-black/60 px-2 py-1">
+                    <button
+                      type="button"
+                      onClick={prevViewer}
+                      aria-label="Previous"
+                      className="rounded-full p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
+                    >
+                      <ChevronLeftIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={nextViewer}
+                      aria-label="Next"
+                      className="rounded-full p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
+                    >
+                      <ChevronRightIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        )
+      })()}
+
       
       {/* CTA: continue to read-only review (no 3D flow) */}
       <div className="container py-4">
