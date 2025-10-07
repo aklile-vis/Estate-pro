@@ -27,6 +27,9 @@ const mockListing = {
   },
   propertyType: "Residential / Condo",
   location: "123 Palm Avenue, Addis Ababa",
+  address: "123 Palm Avenue",
+  city: "Addis Ababa",
+  subCity: "Bole",
   specs: {
     bedrooms: 3,
     bathrooms: 2,
@@ -35,6 +38,7 @@ const mockListing = {
   description:
     "Thoughtfully designed condo featuring open-plan living, floor-to-ceiling windows, and fully integrated smart home controls.",
   amenities: ["Private balcony", "High-speed fiber", "Concierge", "Solar backup"],
+  features: ["24/7 Power Generator", "Underground Water Supply"],
   media: {
     images: [
       "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80",
@@ -76,13 +80,17 @@ export default function AgentListingReviewPage() {
         },
         propertyType: typeof parsed?.propertyType === 'string' ? parsed.propertyType : '',
         location: typeof parsed?.location === 'string' ? parsed.location : '',
+        address: typeof parsed?.address === 'string' ? parsed.address : '',
+        city: typeof parsed?.city === 'string' ? parsed.city : '',
+        subCity: typeof parsed?.subCity === 'string' ? parsed.subCity : '',
         specs: {
-          bedrooms: Number(parsed?.specs?.bedrooms || 0),
-          bathrooms: Number(parsed?.specs?.bathrooms || 0),
+          bedrooms: parsed?.specs?.bedrooms || '0',
+          bathrooms: parsed?.specs?.bathrooms || '1',
           areaSqm: Number(parsed?.specs?.areaSqm || 0),
         },
         description: typeof parsed?.description === 'string' ? parsed.description : '',
         amenities: Array.isArray(parsed?.amenities) ? parsed.amenities : [],
+        features: Array.isArray(parsed?.features) ? parsed.features : [],
         media: {
           images: Array.isArray(parsed?.media?.images) ? parsed.media.images.filter((url: string) => {
             // Filter out problematic URLs and log them for debugging
@@ -151,7 +159,7 @@ export default function AgentListingReviewPage() {
   
 
   const source = draft || mockListing
-  const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, media, immersive } =
+  const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, features, media, immersive } =
     source
 
   const router = useRouter()
@@ -193,6 +201,7 @@ export default function AgentListingReviewPage() {
         currency: pricing.currency,
         address: location.split(', ')[0],
         city: location.split(', ')[1],
+        subCity: draft?.subCity || '',
         images: media.images,
         videos: media.videos.map(v => v.url),
         category: category,
@@ -200,6 +209,8 @@ export default function AgentListingReviewPage() {
         bedrooms: specs.bedrooms,
         bathrooms: specs.bathrooms,
         areaSqm: specs.areaSqm,
+        amenities: draft?.amenities || [],
+        features: draft?.features || [],
         isPublished: true, // Mark as published when submitted from here
         immersive: {
           has3D: immersive.has3D,
@@ -224,8 +235,13 @@ export default function AgentListingReviewPage() {
       const result = await response.json()
       console.log('Listing published successfully:', result)
       
-      // Clear the draft after successful publication
+      // Clear all upload data after successful publication
+      sessionStorage.removeItem('agent:uploadStep1')
+      sessionStorage.removeItem('agent:uploadStep2')
       sessionStorage.removeItem('agent:reviewDraft')
+      
+      // Set flag to indicate successful publishing
+      sessionStorage.setItem('agent:published', 'true')
       
       // Redirect to listings page
       router.push('/listings')
@@ -331,6 +347,23 @@ export default function AgentListingReviewPage() {
                 ))}
               </ul>
             </div>
+
+            {features && features.length > 0 && (
+              <div className="mt-6 space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Special features</h3>
+                <ul className="flex flex-wrap gap-2">
+                  {features.map((item) => (
+                    <li
+                      key={item}
+                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-1 text-sm text-secondary"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-500)]" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
 
           {/* Media */}

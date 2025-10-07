@@ -168,6 +168,18 @@ export default function AgentUploadMediaPage() {
   // Load media data from session storage
   useEffect(() => {
     try {
+      // Check if a listing was recently published
+      const wasPublished = sessionStorage.getItem('agent:published')
+      if (wasPublished) {
+        // Clear all data and start fresh
+        sessionStorage.removeItem('agent:uploadStep1')
+        sessionStorage.removeItem('agent:uploadStep2')
+        sessionStorage.removeItem('agent:reviewDraft')
+        sessionStorage.removeItem('agent:published')
+        return
+      }
+      
+      // Otherwise, restore from sessionStorage
       const raw = sessionStorage.getItem('agent:uploadStep2')
       if (!raw) return
       const parsed = JSON.parse(raw)

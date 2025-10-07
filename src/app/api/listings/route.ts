@@ -43,20 +43,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'basePrice must be a positive number' }, { status: 400 })
     }
 
+    // Parse bedrooms and bathrooms from string values
+    const parseBedrooms = (value: string | number): number => {
+      if (typeof value === 'number') return value
+      if (value === 'Studio') return 0
+      const num = parseInt(value, 10)
+      return isNaN(num) ? 0 : num
+    }
+
+    const parseBathrooms = (value: string | number): number => {
+      if (typeof value === 'number') return value
+      const num = parseInt(value, 10)
+      return isNaN(num) ? 1 : num
+    }
+
     const listingData = {
       title: body.title,
       description: body.description ?? null,
       address: body.address ?? null,
       city: body.city ?? null,
-      bedrooms: body.bedrooms ?? 0,
-      bathrooms: body.bathrooms ?? 0,
+      subCity: body.subCity ?? null,
+      bedrooms: parseBedrooms(body.bedrooms ?? 0),
+      bathrooms: parseBathrooms(body.bathrooms ?? 1),
       areaSqm: body.areaSqm ?? 0,
       basePrice,
       currency,
       coverImage: body.coverImage ?? null,
       has3D: body.immersive?.has3D ?? false,
       // Default to not published, agent can publish explicitly
-      isPublished: body.isPublished ?? false, 
+      isPublished: body.isPublished ?? false,
+      // Store amenities and features as JSON strings
+      amenities: body.amenities && Array.isArray(body.amenities) ? JSON.stringify(body.amenities) : null,
+      features: body.features && Array.isArray(body.features) ? JSON.stringify(body.features) : null,
     }
 
     let targetUnitId = body.unitId

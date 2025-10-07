@@ -7,20 +7,25 @@ import {
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { useAuth } from '@/contexts/AuthContext'
 import { SUPPORTED_CURRENCIES } from '@/lib/utils'
 
-// from publish page, trimmed for Step 1
+// ================================
+// Types & Constants
+// ================================
+
 type ListingFormState = {
   title: string
   basePrice: string
   description: string
   address: string
   city: string
+  subCity: string
   bedrooms: string
   bathrooms: string
   areaSqm: string
   currency: string
+  amenities: string[]
+  features: string[]
 }
 
 const DEFAULT_FORM: ListingFormState = {
@@ -29,11 +34,17 @@ const DEFAULT_FORM: ListingFormState = {
   description: '',
   address: '',
   city: '',
+  subCity: '',
   bedrooms: '',
   bathrooms: '',
   areaSqm: '',
   currency: 'ETB',
+  amenities: [],
+  features: [],
 }
+
+const BED_OPTIONS = ['Studio', '1', '2', '3', '4', '5', '6', '7', '8'] as const
+const BATH_OPTIONS = ['1', '2', '3', '4', '5', '6'] as const
 
 const RESIDENTIAL_TYPES = [
   'Apartment',
@@ -62,26 +73,62 @@ const COMMERCIAL_TYPES = [
   'Other Commercial',
 ] as const
 
+// Concise, realistic amenities list (no Internet option)
+const AMENITIES = [
+  'Parking',
+  'Elevator',
+  'Security',
+  'Gym',
+  'Swimming Pool',
+  'Balcony / Terrace',
+  'Air Conditioning',
+] as const
+
+// Requested features (wording polished)
+const FEATURES = [
+  '24/7 Power Generator',
+  'Underground Water Supply',
+  'Sustainable Water Reserve',
+] as const
+
 type PropertyCategory = 'Residential' | 'Commercial'
 
+// ================================
+// Component
+// ================================
 export default function AgentUploadDetailsPage() {
   const [form, setForm] = useState<ListingFormState>(DEFAULT_FORM)
   const [propTypeOpen, setPropTypeOpen] = useState(false)
   const [propTab, setPropTab] = useState<PropertyCategory>('Residential')
   const [propertyType, setPropertyType] = useState<string>('')
   const propRef = useRef<HTMLDivElement | null>(null)
-  
+  const [bedsOpen, setBedsOpen] = useState(false)
+  const bedsRef = useRef<HTMLDivElement | null>(null)
+
+  const [bathsOpen, setBathsOpen] = useState(false)
+  const bathsRef = useRef<HTMLDivElement | null>(null)
+
+  const [customBeds, setCustomBeds] = useState<string>('')   // for 9+
+  const [customBaths, setCustomBaths] = useState<string>('') // for 7+
+  const [pickerErrors, setPickerErrors] = useState<{beds?: string; baths?: string}>({})
+
+
+
+
   // Form validation state
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const router = useRouter()
 
+  // ----------------
+  // Handlers
+  // ----------------
   const handleChange = (field: keyof ListingFormState) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const value = event.target.value
     setForm((prev) => ({ ...prev, [field]: value }))
-    
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => {
@@ -91,13 +138,23 @@ export default function AgentUploadDetailsPage() {
       })
     }
   }
-  
+
   const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value.toUpperCase()
     setForm((prev) => ({ ...prev, currency: value }))
   }
 
-  // Field validation rules
+  const toggleInArray = (key: 'amenities' | 'features', value: string) => {
+    setForm(prev => {
+      const exists = prev[key].includes(value)
+      const next = exists ? prev[key].filter(v => v !== value) : [...prev[key], value]
+      return { ...prev, [key]: next }
+    })
+  }
+
+  // ----------------
+  // Validation
+  // ----------------
   const validateField = (name: string, value: string): string => {
     switch (name) {
       case 'title':
@@ -110,10 +167,12 @@ export default function AgentUploadDetailsPage() {
         return !value ? 'Address is required' : ''
       case 'city':
         return !value ? 'City is required' : ''
+      case 'subCity':
+        return !value ? 'Sub City is required' : ''
       case 'bedrooms':
-        return !value ? 'Number of bedrooms is required' : isNaN(Number(value)) ? 'Must be a valid number' : ''
+        return !value ? 'Number of bedrooms is required' : ''
       case 'bathrooms':
-        return !value ? 'Number of bathrooms is required' : isNaN(Number(value)) ? 'Must be a valid number' : ''
+        return !value ? 'Number of bathrooms is required' : ''
       case 'areaSqm':
         return !value ? 'Area is required' : isNaN(Number(value)) ? 'Must be a valid number' : Number(value) <= 0 ? 'Area must be greater than 0' : ''
       default:
@@ -121,9 +180,10 @@ export default function AgentUploadDetailsPage() {
     }
   }
 
-  // Handle field blur (for validation)
   const handleBlur = (field: keyof ListingFormState) => {
-    const error = validateField(field, form[field])
+    // Fix: Ensure we only pass string to validateField
+    const value = typeof form[field] === 'string' ? form[field] : ''
+    const error = validateField(field, value)
     if (error) {
       setErrors(prev => ({ ...prev, [field]: error }))
     } else {
@@ -135,42 +195,48 @@ export default function AgentUploadDetailsPage() {
     }
   }
 
-  // Check if form is valid
   const isFormValid = useMemo(() => {
-    return Object.keys(form).every(field => !validateField(field, form[field as keyof typeof form])) && propertyType
+    // propertyType must be selected; amenities/features are optional
+    const fieldsValid = (Object.keys(DEFAULT_FORM) as (keyof ListingFormState)[])
+      .filter(k => !['amenities', 'features'].includes(k as string))
+      .every(field => {
+        const value = typeof form[field] === 'string' ? form[field] : '';
+        return !validateField(field, value);
+      });
+    return fieldsValid && !!propertyType;
   }, [form, propertyType])
 
-  // Validate entire form
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
     let isValid = true
 
-    // Validate form fields
-    Object.keys(form).forEach(field => {
-      const error = validateField(field, form[field as keyof typeof form])
-      if (error) {
-        newErrors[field] = error
-        isValid = false
-      }
-    })
+    ;(Object.keys(DEFAULT_FORM) as (keyof ListingFormState)[])
+      .filter(k => !['amenities', 'features'].includes(k as string))
+      .forEach(field => {
+        // Ensure we only pass string to validateField
+        const value = typeof form[field] === 'string' ? form[field] : '';
+        const error = validateField(field, value)
+        if (error) {
+          newErrors[field] = error
+          isValid = false
+        }
+      })
 
-    // Validate property type
     if (!propertyType) {
       newErrors.propertyType = 'Property type is required'
       isValid = false
     }
 
     setErrors(newErrors)
-    
     return isValid
   }
 
-  // Save form data and navigate to next step
+  // ----------------
+  // Navigation & Storage
+  // ----------------
   const goToMediaStep = useCallback(() => {
-    if (!validateForm()) {
-      return;
-    }
-    
+    if (!validateForm()) return
+
     const STORAGE_KEY = 'agent:uploadStep1'
     const step1Data = {
       form,
@@ -184,20 +250,47 @@ export default function AgentUploadDetailsPage() {
     router.push('/agent/upload/media')
   }, [form, propertyType, router])
 
-  // Load form data from session storage
+  const clearAllData = useCallback(() => {
+    // Reset form to default state
+    setForm(DEFAULT_FORM)
+    setPropertyType('')
+    setPropTab('Residential')
+    setErrors({})
+    
+    // Clear session storage
+    try {
+      sessionStorage.removeItem('agent:uploadStep1')
+      sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:reviewDraft')
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [])
+
   useEffect(() => {
     try {
+      // Check if a listing was recently published
+      const wasPublished = sessionStorage.getItem('agent:published')
+      if (wasPublished) {
+        // Clear all data and start fresh
+        sessionStorage.removeItem('agent:uploadStep1')
+        sessionStorage.removeItem('agent:uploadStep2')
+        sessionStorage.removeItem('agent:reviewDraft')
+        sessionStorage.removeItem('agent:published')
+        return
+      }
+      
+      // Otherwise, restore from sessionStorage
       const raw = sessionStorage.getItem('agent:uploadStep1')
       if (!raw) return
       const parsed = JSON.parse(raw)
-      if (parsed.form) setForm(parsed.form)
+      if (parsed.form) setForm((prev) => ({ ...prev, ...parsed.form }))
       if (parsed.propertyType) setPropertyType(parsed.propertyType)
     } catch {
       // ignore
     }
   }, [])
 
-  // close on outside click
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       if (!propRef.current) return
@@ -207,6 +300,76 @@ export default function AgentUploadDetailsPage() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [propTypeOpen])
 
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!bedsRef.current) return
+      if (!bedsRef.current.contains(e.target as Node)) setBedsOpen(false)
+    }
+    if (bedsOpen) document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [bedsOpen])
+  
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!bathsRef.current) return
+      if (!bathsRef.current.contains(e.target as Node)) setBathsOpen(false)
+    }
+    if (bathsOpen) document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [bathsOpen])
+
+  const onDoneBeds = () => {
+    const raw = customBeds.trim()
+    if (raw) {
+      const n = Number(raw)
+      // validate and show errors if invalid
+      if (!Number.isInteger(n)) {
+        setPickerErrors(p => ({ ...p, beds: 'Must be a whole number' }))
+        return
+      }
+      if (n < 9) {
+        setPickerErrors(p => ({ ...p, beds: 'Must be 9 or higher' }))
+        return
+      }
+      // if valid, apply the value
+      setForm(prev => ({ ...prev, bedrooms: String(n) }))
+      setPickerErrors(p => ({ ...p, beds: undefined }))
+      setCustomBeds('')
+      setBedsOpen(false)
+    } else {
+      // if empty, just close
+      setPickerErrors(p => ({ ...p, beds: undefined }))
+      setCustomBeds('')
+      setBedsOpen(false)
+    }
+  }
+  
+  const onDoneBaths = () => {
+    const raw = customBaths.trim()
+    if (raw) {
+      const n = Number(raw)
+      // validate and show errors if invalid
+      if (!Number.isInteger(n)) {
+        setPickerErrors(p => ({ ...p, baths: 'Must be a whole number' }))
+        return
+      }
+      if (n < 7) {
+        setPickerErrors(p => ({ ...p, baths: 'Must be 7 or higher' }))
+        return
+      }
+      // if valid, apply the value
+      setForm(prev => ({ ...prev, bathrooms: String(n) }))
+      setPickerErrors(p => ({ ...p, baths: undefined }))
+      setCustomBaths('')
+      setBathsOpen(false)
+    } else {
+      // if empty, just close
+      setPickerErrors(p => ({ ...p, baths: undefined }))
+      setCustomBaths('')
+      setBathsOpen(false)
+    }
+  }
+  
   return (
     <div className="min-h-screen bg-[color:var(--app-background)] text-primary">
       {/* Step Indicator */}
@@ -241,16 +404,19 @@ export default function AgentUploadDetailsPage() {
       {/* Step 1: Traditional Details */}
       <div className="container space-y-8 py-8">
         <header className="space-y-3 text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking[0.4em] text-muted">
             <DocumentTextIcon className="h-4 w-4" /> Step 1: Property Details
           </div>
           <h2 className="headline text-3xl">Enter property information</h2>
           <p className="mx-auto max-w-2xl text-sm text-muted">
-            Provide the essential details of this property title, description, address, rooms, and pricing.
+            Provide the essential details such as title, price, address and rooms. Then select applicable amenities & features.
           </p>
         </header>
 
+        {/* Basic Info Section*/}
         <section className="surface-soft space-y-6 p-8 rounded-2xl border border-[color:var(--surface-border)]">
+          <h3 className="text-base font-semibold uppercase">Basic Info</h3>
+
           {/* Title + Price/Currency */}
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1">
@@ -312,25 +478,28 @@ export default function AgentUploadDetailsPage() {
                 onChange={handleChange('description')}
                 onBlur={() => handleBlur('description')}
                 className="input min-h-[96px] w-full"
-                placeholder="Highlight key selling points, finishes, and amenities"
+                placeholder="Describe the property briefly."
               />
               {errors.description && (
                 <p className="mt-1 text-xs text-red-500">{errors.description}</p>
               )}
             </div>
           </label>
+        </section>
 
-          {/* Address / City */}
-          <div className="grid gap-4 md:grid-cols-2">
+        {/* Address & Location Section*/}
+        <section className="surface-soft space-y-6 p-8 rounded-2xl border border-[color:var(--surface-border)]">
+          <h3 className="text-base font-semibold uppercase">Address & Location</h3>
+          <div className="grid gap-4 md:grid-cols-3">
             <label className="space-y-1">
-              <span className="text-[11px] uppercase tracking-wide text-muted">Street address</span>
+              <span className="text-[11px] uppercase tracking-wide text-muted">Neighborhood</span>
               <div className="relative">
                 <input
                   value={form.address}
                   onChange={handleChange('address')}
                   onBlur={() => handleBlur('address')}
                   className="input h-11 w-full"
-                  placeholder="123 Palm Avenue"
+                  placeholder="Bole around Edna mall"
                 />
                 {errors.address && (
                   <p className="mt-1 text-xs text-red-500">{errors.address}</p>
@@ -338,7 +507,7 @@ export default function AgentUploadDetailsPage() {
               </div>
             </label>
             <label className="space-y-1">
-              <span className="text-[11px] uppercase tracking-wide text-muted">City / region</span>
+              <span className="text:[11px] uppercase tracking-wide text-muted">City / Region</span>
               <div className="relative">
                 <input
                   value={form.city}
@@ -352,7 +521,28 @@ export default function AgentUploadDetailsPage() {
                 )}
               </div>
             </label>
+            <label className="space-y-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">Sub City</span>
+              <div className="relative">
+                <input
+                  required
+                  value={form.subCity}
+                  onChange={handleChange('subCity')}
+                  onBlur={() => handleBlur('subCity')}
+                  className="input h-11 w-full"
+                  placeholder="Bole"
+                />
+                {errors.subCity && (
+                  <p className="mt-1 text-xs text-red-500">{errors.subCity}</p>
+                )}
+              </div>
+            </label>
           </div>
+        </section>
+
+        {/* Property Details Section*/}
+        <section className="surface-soft space-y-6 p-8 rounded-2xl border border-[color:var(--surface-border)]">
+          <h3 className="text-base font-semibold uppercase">Property Details</h3>
 
           {/* Property Type (dropdown with Residential/Commercial tabs) */}
           <div className="space-y-1">
@@ -492,40 +682,208 @@ export default function AgentUploadDetailsPage() {
 
           {/* Bedrooms / Bathrooms / Area */}
           <div className="grid gap-4 md:grid-cols-3">
+            {/* Bedrooms */}
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Bedrooms</span>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="1"
-                  value={form.bedrooms}
-                  onChange={handleChange('bedrooms')}
-                  onBlur={() => handleBlur('bedrooms')}
-                  className="input h-11 w-full"
-                  placeholder="3"
-                />
-                {errors.bedrooms && (
-                  <p className="mt-1 text-xs text-red-500">{errors.bedrooms}</p>
+
+              <div className="relative" ref={bedsRef}>
+                {/* Field button */}
+                <button
+                  type="button"
+                  onClick={() => setBedsOpen(o => !o)}
+                  className={`input h-11 w-full flex items-center justify-between ${errors.bedrooms ? 'border-red-500' : ''}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={bedsOpen}
+                >
+                  <span className={form.bedrooms ? 'text-primary' : 'text-disabled'}>
+                    {form.bedrooms || 'Select bedrooms'}
+                  </span>
+                  <ChevronDownIcon className="h-5 w-5 text-muted" />
+                </button>
+                {errors.bedrooms && <p className="mt-1 text-xs text-red-500">{errors.bedrooms}</p>}
+
+                {/* Dropdown */}
+                {bedsOpen && (
+                  <div className="absolute z-50 mt-2 w-full rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[0_18px_40px_rgba(0,0,0,0.15)] p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {BED_OPTIONS.map(label => {
+                        const selected = form.bedrooms === label
+                        return (
+                           <button
+                             key={label}
+                             type="button"
+                             onClick={(e) => {
+                               e.preventDefault()
+                               e.stopPropagation()
+                               setForm(prev => ({ ...prev, bedrooms: label }))
+                               setBedsOpen(false)
+                               if (errors.bedrooms) {
+                                 setErrors(prev => { const n = { ...prev }; delete n.bedrooms; return n })
+                               }
+                             }}
+                            className={`rounded-full px-4 py-2 text-sm border transition ${
+                              selected
+                                ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]/10 text-primary'
+                                : 'border-[color:var(--surface-border)] text-secondary hover:bg-[color:var(--surface-2)]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="my-3 h-px bg-[color:var(--surface-border)]/80" />
+
+                    {/* Custom 9+ row */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted">Custom (9+)</span>
+                       <input
+                         type="number"
+                         min={9}
+                         inputMode="numeric"
+                         value={customBeds}
+                         onChange={(e) => setCustomBeds(e.target.value)}
+                         onKeyDown={(e) => {
+                           if (e.key === 'Enter') {
+                             e.preventDefault()
+                             e.stopPropagation()
+                             onDoneBeds()
+                           }
+                         }}
+                         className="input h-9 w-24"
+                         placeholder="9"
+                       />
+                      {pickerErrors.beds && <span className="ml-2 text-xs text-red-500">{pickerErrors.beds}</span>}
+                    </div>
+
+                     <div className="mt-3 flex justify-end">
+                       <button 
+                         type="button" 
+                         className="btn btn-primary" 
+                         onClick={(e) => {
+                           e.preventDefault()
+                           e.stopPropagation()
+                           onDoneBeds()
+                         }}
+                         onKeyDown={(e) => { 
+                           if (e.key === 'Enter') {
+                             e.preventDefault()
+                             e.stopPropagation()
+                             onDoneBeds()
+                           }
+                         }}>
+                         Done
+                       </button>
+                     </div>
+
+                  </div>
                 )}
               </div>
             </label>
+            
+            {/* Bathrooms */}
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Bathrooms</span>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="1"
-                  value={form.bathrooms}
-                  onChange={handleChange('bathrooms')}
-                  onBlur={() => handleBlur('bathrooms')}
-                  className="input h-11 w-full"
-                  placeholder="2"
-                />
-                {errors.bathrooms && (
-                  <p className="mt-1 text-xs text-red-500">{errors.bathrooms}</p>
+
+              <div className="relative" ref={bathsRef}>
+                {/* Field button */}
+                <button
+                  type="button"
+                  onClick={() => setBathsOpen(o => !o)}
+                  className={`input h-11 w-full flex items-center justify-between ${errors.bathrooms ? 'border-red-500' : ''}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={bathsOpen}
+                >
+                  <span className={form.bathrooms ? 'text-primary' : 'text-disabled'}>
+                    {form.bathrooms || 'Select bathrooms'}
+                  </span>
+                  <ChevronDownIcon className="h-5 w-5 text-muted" />
+                </button>
+                {errors.bathrooms && <p className="mt-1 text-xs text-red-500">{errors.bathrooms}</p>}
+
+                {/* Dropdown */}
+                {bathsOpen && (
+                  <div className="absolute z-50 mt-2 w-full rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[0_18px_40px_rgba(0,0,0,0.15)] p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {BATH_OPTIONS.map(label => {
+                        const selected = form.bathrooms === label
+                        return (
+                           <button
+                             key={label}
+                             type="button"
+                             onClick={(e) => {
+                               e.preventDefault()
+                               e.stopPropagation()
+                               setForm(prev => ({ ...prev, bathrooms: label }))
+                               setBathsOpen(false)
+                               if (errors.bathrooms) {
+                                 setErrors(prev => { const n = { ...prev }; delete n.bathrooms; return n })
+                               }
+                             }}
+                            className={`rounded-full px-4 py-2 text-sm border transition ${
+                              selected
+                                ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]/10 text-primary'
+                                : 'border-[color:var(--surface-border)] text-secondary hover:bg-[color:var(--surface-2)]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="my-3 h-px bg-[color:var(--surface-border)]/80" />
+
+                    {/* Custom 7+ row */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted">Custom (7+)</span>
+                       <input
+                         type="number"
+                         min={7}
+                         inputMode="numeric"
+                         value={customBaths}
+                         onChange={(e) => setCustomBaths(e.target.value)}
+                         onKeyDown={(e) => {
+                           if (e.key === 'Enter') {
+                             e.preventDefault()
+                             e.stopPropagation()
+                             onDoneBaths()
+                           }
+                         }}
+                         className="input h-9 w-24"
+                         placeholder="7"
+                       />
+                      {pickerErrors.baths && <span className="ml-2 text-xs text-red-500">{pickerErrors.baths}</span>}
+                    </div>
+
+                     <div className="mt-3 flex justify-end">
+                       <button 
+                         type="button" 
+                         className="btn btn-primary" 
+                         onClick={(e) => {
+                           e.preventDefault()
+                           e.stopPropagation()
+                           onDoneBaths()
+                         }}
+                         onKeyDown={(e) => { 
+                           if (e.key === 'Enter') {
+                             e.preventDefault()
+                             e.stopPropagation()
+                             onDoneBaths()
+                           }
+                         }}>
+                         Done
+                       </button>
+                     </div>
+                  </div>
                 )}
               </div>
             </label>
+
+            {/* Area */}
             <label className="space-y-1">
               <span className="text-[11px] uppercase tracking-wide text-muted">Area (sqm)</span>
               <div className="relative">
@@ -547,11 +905,97 @@ export default function AgentUploadDetailsPage() {
           </div>
         </section>
 
+        {/* Amenities & Features Section*/}
+        <section className="surface-soft space-y-6 p-8 rounded-2xl border border-[color:var(--surface-border)]">
+          <h3 className="text-base font-semibold uppercase">Amenities & Features</h3>
+
+          {/* Amenities */}
+          <div className="space-y-3">
+            <p className="text-sm text-muted">Select available amenities</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {AMENITIES.map((a) => {
+                const checked = form.amenities.includes(a)
+                return (
+                  <label 
+                    key={a} 
+                    className={`flex items-center gap-3 rounded-xl border px-3 py-2 cursor-pointer transition-all duration-200 ${checked ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]/10' : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] hover:border-[color:var(--accent-400)] hover:bg-[color:var(--accent-500)]/5'}`}
+                  >
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => toggleInArray('amenities', a)}
+                      />
+                      <div className={`flex h-4 w-4 items-center justify-center rounded border transition-all duration-200 ${
+                        checked 
+                          ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]' 
+                          : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)]'
+                      }`}>
+                        {checked && (
+                          <svg className="h-2.5 w-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm">{a}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Features */}
+          <div className="space-y-3">
+            <p className="text-sm text-muted">Select applicable features</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {FEATURES.map((f) => {
+                const checked = form.features.includes(f)
+                return (
+                  <label 
+                    key={f} 
+                    className={`flex items-center gap-3 rounded-xl border px-3 py-2 cursor-pointer transition-all duration-200 ${checked ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]/10' : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)] hover:border-[color:var(--accent-400)] hover:bg-[color:var(--accent-500)]/5'}`}
+                  >
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => toggleInArray('features', f)}
+                      />
+                      <div className={`flex h-4 w-4 items-center justify-center rounded border transition-all duration-200 ${
+                        checked 
+                          ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)]' 
+                          : 'border-[color:var(--surface-border)] bg-[color:var(--surface-1)]'
+                      }`}>
+                        {checked && (
+                          <svg className="h-2.5 w-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm">{f}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* Step 1 Navigation */}
-        <div className="flex justify-end">
-          <button 
-            type="button" 
-            className="btn btn-primary" 
+        <div className="flex justify-between">
+          <button
+            type="button"
+            className="btn btn-secondary text-red-500 hover:text-red-600 hover:bg-red-50"
+            onClick={clearAllData}
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
             onClick={() => {
               if (isFormValid) {
                 goToMediaStep()

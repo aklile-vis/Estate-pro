@@ -194,6 +194,7 @@ model UnitListing {
   description String?
   address     String?
   city        String?
+  subCity     String?
   bedrooms    Int?         @default(0)
   bathrooms   Int?         @default(0)
   areaSqm     Float?       @default(0)
@@ -202,6 +203,8 @@ model UnitListing {
   coverImage  String?
   has3D       Boolean      @default(false)
   isPublished Boolean      @default(false)
+  amenities   String?      // JSON string of amenities array
+  features    String?      // JSON string of features array
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
