@@ -94,9 +94,12 @@ export default function ListingsIndexPage() {
         <div className="divider" />
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {filteredListings.map((listing, index) => {
+            console.log('Listing:', { id: listing.id, title: listing.title, coverImage: listing.coverImage })
             const imageSrc = listing.coverImage
               ? `/api/files/binary?path=${encodeURIComponent(listing.coverImage)}&listingId=${encodeURIComponent(listing.id)}`
               : '/placeholder.jpg'
+            
+            console.log('Image source for listing', listing.id, ':', imageSrc)
 
             return (
               <motion.div

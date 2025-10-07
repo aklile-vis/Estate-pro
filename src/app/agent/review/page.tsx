@@ -52,6 +52,17 @@ const mockListing = {
         label: "Virtual walk-through",
       },
     ],
+    floorPlans: [
+      {
+        url: "https://example.com/media/floor-plan-1.pdf",
+        name: "Ground Floor Plan",
+      },
+      {
+        url: "https://example.com/media/floor-plan-2.jpg",
+        name: "First Floor Plan",
+      },
+    ],
+    coverImage: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80",
   },
   immersive: {
     has3D: true,
@@ -101,6 +112,8 @@ export default function AgentListingReviewPage() {
             return true
           }) : [],
           videos: Array.isArray(parsed?.media?.videos) ? parsed.media.videos : [],
+          floorPlans: Array.isArray(parsed?.media?.floorPlans) ? parsed.media.floorPlans : [],
+          coverImage: parsed?.media?.coverImage || null,
         },
         immersive: {
           has3D: Boolean(parsed?.immersive?.has3D),
@@ -204,6 +217,8 @@ export default function AgentListingReviewPage() {
         subCity: draft?.subCity || '',
         images: media.images,
         videos: media.videos.map(v => v.url),
+        floorPlans: media.floorPlans,
+        coverImage: media.coverImage,
         category: category,
         subtype: subtype,
         bedrooms: specs.bedrooms,
@@ -233,7 +248,6 @@ export default function AgentListingReviewPage() {
       }
 
       const result = await response.json()
-      console.log('Listing published successfully:', result)
       
       // Clear all upload data after successful publication
       sessionStorage.removeItem('agent:uploadStep1')
@@ -378,12 +392,13 @@ export default function AgentListingReviewPage() {
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {media.images.map((path, index) => {
-                console.log('Image path:', path) // Debug log
                 // Construct the proper URL for the image
                 const imageUrl = path.startsWith('http') 
                   ? path 
                   : `/api/files/binary?path=${encodeURIComponent(path)}`
-                console.log('Constructed URL:', imageUrl) // Debug log
+                
+                // Check if this is the cover image
+                const isCoverImage = media.coverImage === path
                 
                 return (
                   <figure
@@ -399,9 +414,15 @@ export default function AgentListingReviewPage() {
                       alt="Listing media"
                       className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]"
                     />
-                    <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent px-3 py-2 text-xs text-white">
-                      Photo asset
-                    </figcaption>
+                    
+                    {/* Cover image indicator */}
+                    {isCoverImage && (
+                      <div className="absolute left-2 top-2 inline-flex items-center rounded-full bg-[color:var(--accent-500)] px-2 py-1 text-xs font-medium text-white">
+                        ✓ Cover Image
+                      </div>
+                    )}
+                    
+                    
                   </figure>
                 )
               })}
@@ -446,6 +467,50 @@ export default function AgentListingReviewPage() {
                     </figure>
                   )
                 })}
+              </div>
+            )}
+
+            {media.floorPlans.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Floor Plans</h3>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {media.floorPlans.map((floorPlan, index) => {
+                    const floorPlanUrl = floorPlan.url.startsWith('http')
+                      ? floorPlan.url
+                      : `/api/files/binary?path=${encodeURIComponent(floorPlan.url)}`
+
+                    return (
+                      <figure
+                        key={floorPlan.url}
+                        className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[color:var(--surface-border)]">
+                            <svg className="h-6 w-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-secondary truncate" title={floorPlan.name}>
+                              {floorPlan.name}
+                            </p>
+                            <p className="text-xs text-muted">
+                              {floorPlan.url.includes('.pdf') ? 'PDF Document' : 'Image File'}
+                            </p>
+                          </div>
+                          <a
+                            href={floorPlanUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center rounded-full bg-[color:var(--accent-500)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--accent-600)] transition-colors"
+                          >
+                            View
+                          </a>
+                        </div>
+                      </figure>
+                    )
+                  })}
+                </div>
               </div>
             )}
 

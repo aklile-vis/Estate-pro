@@ -11,7 +11,7 @@ import {
   PlayCircleIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -278,7 +278,6 @@ export default function AgentUpload3DPage() {
     }
 
     if (!step1Data) {
-      console.error('Step 1 data not found')
       return
     }
 
@@ -307,6 +306,20 @@ export default function AgentUpload3DPage() {
       media: {
         images: step2Data?.images?.map((m: any) => m.url) || [],
         videos: step2Data?.videos?.map((v: any) => ({ url: v.url, label: v.file?.name || 'Video clip' })) || [],
+        floorPlans: step2Data?.floorPlans?.map((fp: any) => ({ url: fp.url, name: fp.name })) || [],
+        coverImage: (() => {
+          // Find the cover image first
+          const coverImg = step2Data?.images?.find((img: any) => img.isCover)
+          if (coverImg) {
+            return coverImg.url
+          }
+          // If no cover image is selected, use the first image
+          const firstImg = step2Data?.images?.[0]
+          if (firstImg) {
+            return firstImg.url
+          }
+          return null
+        })(),
       },
       immersive: { 
         has3D: skip3D ? false : (savedModelId || result?.glbPath)

@@ -1,21 +1,25 @@
 'use client'
 
-import { PhotoIcon, FilmIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { PhotoIcon, FilmIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, DocumentIcon } from '@heroicons/react/24/outline'
 import { useCallback, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
 
 // Images
-type ImageItem = { file?: File | null; url: string }
+type ImageItem = { file?: File | null; url: string; isCover?: boolean }
 // Videos
 type VideoItem = { file?: File | null; url: string }
+// Floor Plans
+type FloorPlanItem = { file?: File | null; url: string; name: string }
 
 export default function AgentUploadMediaPage() {
   const [images, setImages] = useState<ImageItem[]>([])
   const [videos, setVideos] = useState<VideoItem[]>([])
+  const [floorPlans, setFloorPlans] = useState<FloorPlanItem[]>([])
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const videoInputRef = useRef<HTMLInputElement | null>(null)
+  const floorPlanInputRef = useRef<HTMLInputElement | null>(null)
 
   const { token } = useAuth()
   const router = useRouter()
@@ -38,8 +42,7 @@ export default function AgentUploadMediaPage() {
         
         if (response.ok) {
           const result = await response.json()
-          console.log('Upload result:', result) // Debug log
-          setImages(prev => [...prev, { file, url: result.url }])
+          setImages(prev => [...prev, { file, url: result.url, isCover: false }])
         } else {
           console.error('Failed to upload image:', file.name)
         }
@@ -89,6 +92,56 @@ export default function AgentUploadMediaPage() {
       copy.splice(idx, 1)
       return copy
     })
+  }
+
+  const addFloorPlans = async (files: FileList | File[]) => {
+    const floorPlanFiles = Array.from(files).filter(f => 
+      f.type === 'application/pdf' || f.type.startsWith('image/')
+    )
+    
+    for (const file of floorPlanFiles) {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        
+        const response = await fetch('/api/upload-media', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('Floor plan upload result:', result)
+          setFloorPlans(prev => [...prev, { 
+            file, 
+            url: result.url, 
+            name: file.name 
+          }])
+        } else {
+          console.error('Failed to upload floor plan:', file.name)
+        }
+      } catch (error) {
+        console.error('Error uploading floor plan:', error)
+      }
+    }
+  }
+
+  const removeFloorPlanAt = (idx: number) => {
+    setFloorPlans(prev => {
+      const copy = [...prev]
+      copy.splice(idx, 1)
+      return copy
+    })
+  }
+
+  const setCoverImage = (idx: number) => {
+    setImages(prev => prev.map((img, i) => ({
+      ...img,
+      isCover: i === idx
+    })))
   }
 
   const onCardKeyDown = (e: React.KeyboardEvent, open: () => void) => {
@@ -147,10 +200,22 @@ export default function AgentUploadMediaPage() {
 
   // Save media data and navigate to next step
   const goTo3DStep = useCallback(() => {
+    // Auto-set first image as cover if no cover is selected
+    let processedImages = [...images]
+    const hasCoverImage = images.some(img => img.isCover)
+    
+    if (!hasCoverImage && images.length > 0) {
+      processedImages = images.map((img, idx) => ({
+        ...img,
+        isCover: idx === 0
+      }))
+    }
+    
     const STORAGE_KEY = 'agent:uploadStep2'
     const step2Data = {
-      images,
+      images: processedImages,
       videos,
+      floorPlans,
     }
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(step2Data))
@@ -158,7 +223,7 @@ export default function AgentUploadMediaPage() {
       /* ignore storage errors */
     }
     router.push('/agent/upload/3d')
-  }, [images, videos, router])
+  }, [images, videos, floorPlans, router])
 
   // Go back to details step
   const goBackToDetails = useCallback(() => {
@@ -179,12 +244,13 @@ export default function AgentUploadMediaPage() {
         return
       }
       
-      // Otherwise, restore from sessionStorage
-      const raw = sessionStorage.getItem('agent:uploadStep2')
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (parsed.images) setImages(parsed.images)
-      if (parsed.videos) setVideos(parsed.videos)
+        // Otherwise, restore from sessionStorage
+        const raw = sessionStorage.getItem('agent:uploadStep2')
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        if (parsed.images) setImages(parsed.images)
+        if (parsed.videos) setVideos(parsed.videos)
+        if (parsed.floorPlans) setFloorPlans(parsed.floorPlans)
     } catch {
       // ignore
     }
@@ -227,14 +293,14 @@ export default function AgentUploadMediaPage() {
           <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 text-xs uppercase tracking-[0.4em] text-muted">
             <PhotoIcon className="h-4 w-4" /> Step 2: Media Upload
           </div>
-          <h2 className="headline text-3xl">Add photos and videos</h2>
+          <h2 className="headline text-3xl">Add photos, videos & floor plans</h2>
           <p className="mx-auto max-w-2xl text-sm text-muted">
-            Upload multiple images and short clips to showcase the property.
+            Upload multiple images, short clips, and floor plans to showcase the property.
           </p>
         </header>
 
         <section className="surface-soft p-8 rounded-2xl border border-[color:var(--surface-border)] space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-3">
             {/* Images uploader */}
             <div className="space-y-3">
               <p className="text-sm font-medium text-secondary flex items-center gap-2">
@@ -267,37 +333,63 @@ export default function AgentUploadMediaPage() {
               </div>
 
               {images.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {images.map((m, idx) => {
-                      return (
-                        <div
-                          key={m.url}
-                          role="button"
-                          tabIndex={0}
-                          aria-label="Open image"
-                          onClick={() => setViewer({ type: 'image', index: idx })}
-                          onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'image', index: idx }))}
-                          className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={toAbsolute(m.url)}
-                            alt={m.file?.name || 'Listing image'}
-                            className="h-32 w-full object-cover"
-                            loading="lazy"
-                          />
-                          <button
-                            type="button"
-                            className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); removeImageAt(idx) }}
-                            aria-label="Remove image"
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {images.map((m, idx) => {
+                        return (
+                          <div
+                            key={m.url}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Open image"
+                            onClick={() => setViewer({ type: 'image', index: idx })}
+                            onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'image', index: idx }))}
+                            className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)] cursor-pointer"
                           >
-                            <XMarkIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      )
-                      
-                  })}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={toAbsolute(m.url)}
+                              alt={m.file?.name || 'Listing image'}
+                              className="h-32 w-full object-cover"
+                              loading="lazy"
+                            />
+                            
+                            {/* Cover image indicator */}
+                            {m.isCover && (
+                              <div className="absolute left-2 top-2 inline-flex items-center rounded-full bg-[color:var(--accent-500)] px-2 py-1 text-xs font-medium text-white">
+                                ✓ Cover Image
+                              </div>
+                            )}
+                            
+                            {/* Cover selection button - always visible */}
+                            {!m.isCover && (
+                              <button
+                                type="button"
+                                className="absolute left-2 top-2 inline-flex items-center rounded-full bg-[color:var(--accent-500)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--accent-600)] transition-colors"
+                                onClick={(e) => { e.stopPropagation(); setCoverImage(idx) }}
+                                aria-label="Set as cover image"
+                                title="Set as cover image"
+                              >
+                                Set as Cover
+                              </button>
+                            )}
+                            
+                            {/* Action buttons */}
+                            <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                              <button
+                                type="button"
+                                className="inline-flex items-center rounded-full bg-black/50 p-1.5 text-white"
+                                onClick={(e) => { e.stopPropagation(); removeImageAt(idx) }}
+                                aria-label="Remove image"
+                                title="Remove image"
+                              >
+                                <XMarkIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -334,35 +426,109 @@ export default function AgentUploadMediaPage() {
               </div>
 
               {videos.length > 0 && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {videos.map((v, idx) => {
-                      return (
-                        <div
-                          key={v.url}
-                          role="button"
-                          tabIndex={0}
-                          aria-label="Open video"
-                          onClick={() => setViewer({ type: 'video', index: idx })}
-                          onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'video', index: idx }))}
-                          className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
-                        >
-                          <video
-                            className="h-32 w-full object-cover"
-                            src={toAbsolute(v.url)}
-                            preload="metadata"
-                            muted
-                          />
-                          <button
-                            type="button"
-                            className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); removeVideoAt(idx) }}
-                            aria-label="Remove video"
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {videos.map((v, idx) => {
+                        return (
+                          <div
+                            key={v.url}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Open video"
+                            onClick={() => setViewer({ type: 'video', index: idx })}
+                            onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'video', index: idx }))}
+                            className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
                           >
-                            <XMarkIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      )
-                  })}
+                            <video
+                              className="h-32 w-full object-cover"
+                              src={toAbsolute(v.url)}
+                              preload="metadata"
+                              muted
+                            />
+                            <button
+                              type="button"
+                              className="absolute right-2 top-2 inline-flex items-center rounded-full bg-black/50 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                              onClick={(e) => { e.stopPropagation(); removeVideoAt(idx) }}
+                              aria-label="Remove video"
+                            >
+                              <XMarkIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Floor Plans uploader */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-secondary flex items-center gap-2">
+                <DocumentIcon className="h-5 w-5 text-muted" /> Floor Plans
+              </p>
+              <div
+                className="rounded-xl border border-dashed border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-5 text-center"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (e.dataTransfer.files?.length) addFloorPlans(e.dataTransfer.files)
+                }}
+              >
+                <p className="text-sm text-secondary">Drag & drop floor plans here</p>
+                <p className="text-xs text-muted">PDF or JPG files</p>
+                <p className="text-xs text-muted">or</p>
+                <button type="button" className="btn btn-secondary" onClick={() => floorPlanInputRef.current?.click()}>
+                  Select floor plans
+                </button>
+                <input
+                  ref={floorPlanInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) addFloorPlans(e.target.files)
+                    e.currentTarget.value = ''
+                  }}
+                />
+              </div>
+
+              {floorPlans.length > 0 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3">
+                    {floorPlans.map((fp, idx) => {
+                        const isPdf = fp.file?.type === 'application/pdf'
+                        return (
+                          <div
+                            key={fp.url}
+                            className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[color:var(--surface-border)]">
+                                <DocumentIcon className="h-6 w-6 text-muted" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-secondary truncate" title={fp.name}>
+                                  {fp.name}
+                                </p>
+                                <p className="text-xs text-muted">
+                                  {isPdf ? 'PDF Document' : 'Image File'}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="inline-flex items-center rounded-full bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-opacity group-hover:opacity-100"
+                                onClick={(e) => { e.stopPropagation(); removeFloorPlanAt(idx) }}
+                                aria-label="Remove floor plan"
+                                title="Remove floor plan"
+                              >
+                                <XMarkIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
