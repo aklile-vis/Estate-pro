@@ -15,6 +15,25 @@ function contentTypeFromExt(ext: string): string {
     case '.usd':
     case '.usda':
       return 'application/octet-stream'
+    case '.pdf':
+      return 'application/pdf'
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg'
+    case '.png':
+      return 'image/png'
+    case '.gif':
+      return 'image/gif'
+    case '.webp':
+      return 'image/webp'
+    case '.mp4':
+      return 'video/mp4'
+    case '.webm':
+      return 'video/webm'
+    case '.mov':
+      return 'video/quicktime'
+    case '.avi':
+      return 'video/avi'
     case '.txt':
       return 'text/plain; charset=utf-8'
     default:
@@ -114,6 +133,13 @@ export async function GET(request: NextRequest) {
         'Content-Type': ct,
         'Content-Disposition': `inline; filename="file${ext || ''}"`,
         'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'SAMEORIGIN',
+        // Additional headers to prevent download managers from intercepting
+        ...(ct === 'application/pdf' && {
+          'Content-Security-Policy': "frame-ancestors 'self'",
+          'X-Download-Options': 'noopen',
+        }),
       },
     })
   } catch (error) {

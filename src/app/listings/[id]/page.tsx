@@ -1121,7 +1121,7 @@ export default function PublicListingPage() {
         
         <div className="flex flex-1 min-h-0">
           <div className="flex-1 overflow-auto bg-[color:var(--surface-0)]">
-            <TraditionalViewer />
+            <TraditionalViewer listing={data} />
           </div>
         </div>
       </div>

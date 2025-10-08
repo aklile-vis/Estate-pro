@@ -12,7 +12,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     if (!listing.isPublished && !isAgent) {
       return NextResponse.json({ error: 'Listing not available' }, { status: 404 })
     }
-    const unit = await prisma.propertyUnit.findUnique({ where: { id: listing.unitId }, include: { fileUpload: true } })
+    const unit = await prisma.propertyUnit.findUnique({ 
+      where: { id: listing.unitId }, 
+      include: { 
+        fileUpload: true,
+        media: true
+      } 
+    })
 
     let guidedViews: Array<{ id: string; name: string; position: number[]; target: number[] }> = []
     const editorState = unit?.editorState

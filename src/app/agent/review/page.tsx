@@ -9,7 +9,6 @@ import {
   CheckBadgeIcon,
   ClipboardDocumentListIcon,
   CubeTransparentIcon,
-  HomeModernIcon,
   MapPinIcon,
   PhotoIcon,
   PlayCircleIcon,
@@ -131,8 +130,11 @@ export default function AgentListingReviewPage() {
   // Build absolute URLs for stored paths
   const toAbsolute = (url: string) => (url?.startsWith('http') ? url : `/api/files/binary?path=${encodeURIComponent(url)}`)
 
-// Lightbox state
-  type Viewer = { type: 'image' | 'video'; index: number } | null
+// Hero carousel state
+  const [heroIndex, setHeroIndex] = useState(0)
+
+  // Lightbox state
+  type Viewer = { type: 'image' | 'video'; index: number; isFloorPlan?: boolean } | null
   const [viewer, setViewer] = useState<Viewer>(null)
 
   const closeViewer = () => setViewer(null)
@@ -147,6 +149,31 @@ export default function AgentListingReviewPage() {
     const list = viewer.type === 'image' ? media.images : media.videos
     if (!list?.length) return
     setViewer({ type: viewer.type, index: (viewer.index - 1 + list.length) % list.length })
+  }
+
+  // Hero carousel navigation
+  const nextHeroMedia = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (allMedia.length > 0) {
+      setHeroIndex((prev) => (prev + 1) % allMedia.length)
+    }
+  }
+
+  const prevHeroMedia = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (allMedia.length > 0) {
+      setHeroIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length)
+    }
+  }
+
+  const openHeroInViewer = () => {
+    if (allMedia.length > 0 && currentHeroMedia) {
+      if (currentHeroMedia.type === 'image') {
+        setViewer({ type: 'image', index: currentHeroMedia.index })
+      } else {
+        setViewer({ type: 'video', index: currentHeroMedia.index })
+      }
+    }
   }
 
   // Keyboard + scroll lock while viewer is open
@@ -174,6 +201,16 @@ export default function AgentListingReviewPage() {
   const source = draft || mockListing
   const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, features, media, immersive } =
     source
+
+  // Set hero index to cover image when media is available
+  useEffect(() => {
+    if (media.coverImage && media.images.length > 0) {
+      const coverIndex = media.images.findIndex(img => img === media.coverImage)
+      if (coverIndex >= 0) {
+        setHeroIndex(coverIndex)
+      }
+    }
+  }, [media.coverImage, media.images])
 
   const router = useRouter()
   const { token } = useAuth()
@@ -268,420 +305,638 @@ export default function AgentListingReviewPage() {
     }
   }
 
+  // Combine images and videos for carousel
+  const allMedia = [
+    ...media.images.map((img, index) => ({ type: 'image' as const, url: img, index })),
+    ...media.videos.map((video, index) => ({ type: 'video' as const, url: video.url, index, label: video.label }))
+  ]
+
+  // Get current hero media based on carousel index
+  const currentHeroMedia = allMedia.length > 0 ? allMedia[heroIndex] : null
+  const heroUrl = currentHeroMedia ? toAbsolute(currentHeroMedia.url) : 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1600&q=80'
+
   return (
     <div className="min-h-screen bg-[color:var(--app-background)] text-primary">
+      {/* Step Indicator */}
       <div className="border-b border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
-        <div className="container flex flex-col gap-6 py-10 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-2)] px-4 py-1.5 text-xs uppercase tracking-[0.35em] text-muted">
-              <ClipboardDocumentListIcon className="h-4 w-4" /> Review & Publish
-            </div>
-            <div>
-              <h1 className="headline text-3xl md:text-4xl">Final review before publishing</h1>
-              <p className="mt-2 max-w-2xl text-sm text-muted">
-                Confirm the listing information pulled from your upload workflow. Everything below mirrors what buyers will
-                see once you publish.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link href="/agent/upload?restore=1" className="btn btn-secondary">
-              Return to edit
-            </Link>
-            <button 
-              type="button" 
-              className="btn btn-primary" 
-              onClick={publishListing}
-              disabled={isPublishing}
-            >
-              {isPublishing ? 'Publishing...' : 'Publish listing'}
-            </button>
-            {/* Temporary button to clear session storage */}
-            <button type="button" className="btn btn-outline" onClick={clearSessionStorage}>
-              Clear Session Data
-            </button>
+        <div className="container py-6">
+          <div className="flex items-center justify-center space-x-8">
+            {[1, 2, 3, 4].map((step) => (
+              <div key={step} className="flex items-center">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold ${
+                    step <= 3
+                      ? 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)] text-white'
+                      : 'border-[color:var(--accent-500)] bg-[color:var(--accent-500)] text-white'
+                  }`}
+                >
+                  {step === 4 ? <ClipboardDocumentListIcon className="h-5 w-5" /> : step}
+                </div>
+                <div className="ml-3 text-sm">
+                  <p className={`font-medium ${step <= 4 ? 'text-primary' : 'text-muted'}`}>
+                    {step === 1 ? 'Property Details' : step === 2 ? 'Media Upload' : step === 3 ? '3D Pipeline' : 'Review & Preview'}
+                  </p>
+                </div>
+                {step < 4 && (
+                  <div className={`ml-8 h-px w-16 ${step < 3 ? 'bg-[color:var(--accent-500)]' : 'bg-[color:var(--accent-500)]'}`} />
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="container grid gap-8 py-10 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-8">
-          {/* Overview */}
-          <section className="surface-soft rounded-3xl border border-[color:var(--surface-border)] p-8 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-              <div className="space-y-4">
-                <p className="text-xs uppercase tracking-[0.4em] text-muted">Listing snapshot</p>
-                <div>
-                  <h2 className="text-2xl font-semibold text-primary">{title}</h2>
-                  <p className="text-sm text-secondary">{subtitle}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-muted">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] px-3 py-1">
-                    <TagIcon className="h-4 w-4" /> {propertyType}
-                  </span>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] px-3 py-1">
-                    <MapPinIcon className="h-4 w-4" /> {location}
-                  </span>
-                </div>
+      {/* Review Header */}
+      <div className="border-b border-[color:var(--surface-border)] bg-[color:var(--surface-1)]">
+        <div className="container py-8">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--accent-500)] bg-[color:var(--accent-500)]/10 px-4 py-1.5 text-xs uppercase tracking-[0.35em] text-[color:var(--accent-500)]">
+                <ClipboardDocumentListIcon className="h-4 w-4" /> Step 4 of 4
               </div>
-              <div className="space-y-2 text-right">
-                <p className="text-xs uppercase tracking-[0.35em] text-muted">Base price</p>
-                <p className="text-3xl font-semibold text-primary">
-                  {pricing.currency} {pricing.basePrice}
+              <div>
+                <h1 className="text-3xl font-bold text-primary">Final Review & Preview</h1>
+                <p className="mt-2 max-w-2xl text-lg text-secondary">
+                  This is exactly what buyers will see when browsing your property listing. Review all details before publishing.
                 </p>
-                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--surface-2)] px-3 py-1 text-xs uppercase tracking-wide text-muted">
-                  <CheckBadgeIcon className="h-4 w-4" /> {status}
-                </span>
               </div>
             </div>
 
-            <div className="mt-8 grid gap-6 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 md:grid-cols-3">
-              <DetailBlock icon={<HomeModernIcon className="h-6 w-6" />} label="Bedrooms" value={`${specs.bedrooms} bed`} />
-              <DetailBlock icon={<HomeModernIcon className="h-6 w-6" />} label="Bathrooms" value={`${specs.bathrooms} bath`} />
-              <DetailBlock icon={<HomeModernIcon className="h-6 w-6" />} label="Area" value={`${specs.areaSqm} sqm`} />
+            <div className="flex flex-wrap gap-3">
+              <Link href="/agent/upload?restore=1" className="btn btn-secondary">
+                Back to Edit
+              </Link>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={publishListing}
+                disabled={isPublishing}
+              >
+                {isPublishing ? 'Publishing...' : 'Publish Listing'}
+              </button>
             </div>
+          </div>
+        </div>
+      </div>
 
-            <article className="mt-8 space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Listing description</h3>
-              <p className="text-sm leading-relaxed text-secondary">{description}</p>
-            </article>
-
-            <div className="mt-8 space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Key amenities</h3>
-              <ul className="flex flex-wrap gap-2">
-                {amenities.map((item) => (
-                  <li
-                    key={item}
-                    className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-1 text-sm text-secondary"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-500)]" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {features && features.length > 0 && (
-              <div className="mt-6 space-y-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Special features</h3>
-                <ul className="flex flex-wrap gap-2">
-                  {features.map((item) => (
-                    <li
-                      key={item}
-                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-1 text-sm text-secondary"
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent-500)]" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+      {/* Hero Media Carousel Section */}
+      <div 
+        className="relative h-[500px] overflow-hidden bg-black cursor-pointer group"
+        onClick={openHeroInViewer}
+      >
+        {/* Media Content */}
+        {currentHeroMedia?.type === 'video' ? (
+          <video
+            src={heroUrl}
+            className="h-full w-full object-contain bg-black"
+            muted
+            playsInline
+            loop
+            autoPlay
+            controls={false}
+            onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}) }}
+            onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+          />
+        ) : (
+          <img 
+            src={heroUrl} 
+            alt={title}
+            className="h-full w-full object-contain bg-black"
+          />
+        )}
+        
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        
+        {/* Click to view overlay */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+          <div className="bg-black/70 rounded-full p-4">
+            {currentHeroMedia?.type === 'video' ? (
+              <PlayCircleIcon className="h-12 w-12 text-white" />
+            ) : (
+              <svg className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
             )}
-          </section>
+          </div>
+        </div>
+        
+        {/* Property Badge */}
+        <div className="absolute left-6 top-6 z-10">
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold shadow-lg">
+            <TagIcon className="h-4 w-4 text-[color:var(--accent-500)]" />
+            {propertyType}
+          </span>
+        </div>
 
-          {/* Media */}
-          <section className="space-y-6">
-            <header className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.35em] text-muted">Media gallery</p>
-                <h3 className="text-lg font-semibold text-primary">Photos & video clips</h3>
-                <p className="text-xs text-muted">These uploads will appear in the order shown below.</p>
-              </div>
-            </header>
+        {/* 3D Tour Badge */}
+        {immersive.has3D && (
+          <div className="absolute right-6 top-6 z-10">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[color:var(--accent-500)] px-4 py-2 text-sm font-semibold text-white shadow-lg">
+              <CubeTransparentIcon className="h-5 w-5" />
+              3D Virtual Tour Available
+            </span>
+          </div>
+        )}
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {media.images.map((path, index) => {
-                // Construct the proper URL for the image
-                const imageUrl = path.startsWith('http') 
-                  ? path 
-                  : `/api/files/binary?path=${encodeURIComponent(path)}`
-                
-                // Check if this is the cover image
-                const isCoverImage = media.coverImage === path
-                
-                return (
-                  <figure
-                    key={path}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setViewer({ type: 'image', index })}
-                    onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'image', index }))}
-                    className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
-                  >
-                    <img
-                      src={imageUrl}
-                      alt="Listing media"
-                      className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                    />
-                    
-                    {/* Cover image indicator */}
-                    {isCoverImage && (
-                      <div className="absolute left-2 top-2 inline-flex items-center rounded-full bg-[color:var(--accent-500)] px-2 py-1 text-xs font-medium text-white">
-                        ✓ Cover Image
+        {/* Carousel Navigation Arrows */}
+        {allMedia.length > 1 && (
+          <>
+            <button
+              onClick={prevHeroMedia}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 rounded-full bg-black/60 p-3 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/40"
+              aria-label="Previous media"
+            >
+              <ChevronLeftIcon className="h-6 w-6" />
+            </button>
+            <button
+              onClick={nextHeroMedia}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 rounded-full bg-black/60 p-3 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-black/80 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-white/40"
+              aria-label="Next media"
+            >
+              <ChevronRightIcon className="h-6 w-6" />
+            </button>
+          </>
+        )}
+
+        {/* Media Counter & Indicator Dots */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm">
+            {currentHeroMedia?.type === 'video' ? (
+              <PlayCircleIcon className="h-5 w-5" />
+            ) : (
+              <PhotoIcon className="h-5 w-5" />
+            )}
+            <span>{heroIndex + 1} / {allMedia.length}</span>
+          </div>
+        </div>
+
+        {/* Dot Indicators */}
+        {allMedia.length > 1 && allMedia.length <= 10 && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+            {allMedia.map((mediaItem, index) => (
+              <button
+                key={index}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setHeroIndex(index)
+                }}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  index === heroIndex 
+                    ? 'w-8 bg-white' 
+                    : 'w-2 bg-white/50 hover:bg-white/80'
+                }`}
+                aria-label={`Go to ${mediaItem.type} ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className="container py-8">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
+          {/* Left Column - Property Details */}
+          <div className="space-y-8">
+            {/* Title & Price */}
+            <section className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <h1 className="text-4xl font-bold text-primary">{title}</h1>
+                  <p className="text-lg text-secondary">{subtitle}</p>
+                  <div className="flex gap-3 text-muted">
+                    <MapPinIcon className="h-8 w-8 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="text-base font-medium">{source.address}</div>
+                      <div className="text-sm text-muted">
+                        {source.subCity && source.city ? `${source.subCity}, ${source.city}` : source.city || source.subCity || ''}
                       </div>
-                    )}
-                    
-                    
-                  </figure>
-                )
-              })}
-            </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-4xl font-bold text-[color:var(--accent-500)]">
+                    {pricing.currency} {pricing.basePrice}
+                  </p>
+                </div>
+              </div>
+            </section>
 
-            {media.videos.length > 0 && (
+            {/* Key Stats */}
+            <section className="grid grid-cols-3 gap-4 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6">
+              <div className="space-y-2 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent-500)]/10">
+                  <svg className="h-6 w-6 text-[color:var(--accent-500)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6h18M3 6v12a2 2 0 002 2h14a2 2 0 002-2V6M3 6V4a2 2 0 012-2h14a2 2 0 012 2v2M7 8h10M7 8v8M17 8v8M9 10h6M9 14h6" />
+                    <circle cx="12" cy="10" r="1" fill="currentColor" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 10h2" />
+                  </svg>
+                </div>
+                <p className="text-2xl font-bold text-primary">{specs.bedrooms}</p>
+                <p className="text-sm text-muted">Bedrooms</p>
+              </div>
+              <div className="space-y-2 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent-500)]/10">
+                  <svg className="h-6 w-6 text-[color:var(--accent-500)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8h18M3 8v8a2 2 0 002 2h14a2 2 0 002-2V8M3 8V6a2 2 0 012-2h14a2 2 0 012 2v2M7 10h10M7 10v4M17 10v4M9 12h6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4h2M5 4v2M5 4l1 1M7 4l-1 1M5 6h2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 5v1M6 6v1M6 7v1" />
+                  </svg>
+                </div>
+                <p className="text-2xl font-bold text-primary">{specs.bathrooms}</p>
+                <p className="text-sm text-muted">Bathrooms</p>
+              </div>
+              <div className="space-y-2 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent-500)]/10">
+                  <svg className="h-6 w-6 text-[color:var(--accent-500)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h18v18H3V3zM3 12h18M12 3v18" />
+                  </svg>
+                </div>
+                <p className="text-2xl font-bold text-primary">{specs.areaSqm}</p>
+                <p className="text-sm text-muted">Sqm</p>
+              </div>
+            </section>
+
+            {/* Description */}
+            <section className="space-y-4 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-8">
+              <h2 className="text-2xl font-semibold text-primary">About This Property</h2>
+              <p className="text-base leading-relaxed text-secondary">{description}</p>
+            </section>
+
+            {/* Amenities & Features */}
+            <section className="space-y-6 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-8">
+              <h2 className="text-2xl font-semibold text-primary">Amenities & Features</h2>
+              
+              {amenities.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Amenities</h3>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    {amenities.map((item) => (
+                      <div key={item} className="flex items-center gap-2 text-sm text-secondary">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100">
+                          <CheckBadgeIcon className="h-4 w-4 text-green-600" />
+                        </div>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {features && features.length > 0 && (
+                <div className="space-y-3 pt-4 border-t border-[color:var(--surface-border)]">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Special Features</h3>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    {features.map((item) => (
+                      <div key={item} className="flex items-center gap-2 text-sm text-secondary">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100">
+                          <CheckBadgeIcon className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Photo Gallery */}
+            <section className="space-y-4">
+              <h2 className="text-2xl font-semibold text-primary">Property Gallery</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {media.videos.map((video, index) => {
-                  const videoUrl = video.url.startsWith('http')
-                    ? video.url
-                    : `/api/files/binary?path=${encodeURIComponent(video.url)}`
-
+                {media.images.map((path, index) => {
+                  const imageUrl = path.startsWith('http') 
+                    ? path 
+                    : `/api/files/binary?path=${encodeURIComponent(path)}`
+                  const isCoverImage = media.coverImage === path
+                  
                   return (
+                    <figure
+                      key={path}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setViewer({ type: 'image', index })}
+                      onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'image', index }))}
+                      className="group relative overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
+                    >
+                      <img
+                        src={imageUrl}
+                        alt={`Property photo ${index + 1}`}
+                        className="h-56 w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                      {isCoverImage && (
+                        <div className="absolute left-2 top-2 rounded-full bg-[color:var(--accent-500)] px-2 py-1 text-xs font-medium text-white">
+                          Cover Photo
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
+                    </figure>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Video Tours */}
+            {media.videos.length > 0 && (
+              <section className="space-y-4">
+                <h2 className="text-2xl font-semibold text-primary">Video Tours</h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {media.videos.map((video, index) => (
                     <figure
                       key={video.url}
                       role="button"
                       tabIndex={0}
                       onClick={() => setViewer({ type: 'video', index })}
                       onKeyDown={(e) => onCardKeyDown(e, () => setViewer({ type: 'video', index }))}
-                      className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
+                      className="group relative overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-500)]"
                     >
                       <video
                         src={toAbsolute(video.url)}
                         preload="metadata"
                         muted
                         playsInline
-                        className="h-48 w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                        className="h-64 w-full object-cover"
                         controls={false}
                         onMouseEnter={(e) => { e.currentTarget.play().catch(() => {}) }}
                         onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
                       />
-                      {/* Centered play badge; fades on hover */}
-                      <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white opacity-100 transition-opacity group-hover:opacity-0">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-10 w-10 drop-shadow">
-                          <path d="M8.25 5.75v12.5l10-6.25-10-6.25z" />
-                        </svg>
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity group-hover:opacity-0">
+                        <PlayCircleIcon className="h-16 w-16 text-white drop-shadow-lg" />
                       </div>
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
-                      <figcaption className="absolute inset-x-0 bottom-0 px-3 py-2 text-xs text-white">
-                        {video.label || 'Video asset'}
-                      </figcaption>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+                        <p className="text-sm font-medium text-white">{video.label || 'Video Tour'}</p>
+                      </div>
                     </figure>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              </section>
             )}
 
+            {/* Floor Plans */}
             {media.floorPlans.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Floor Plans</h3>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <section className="space-y-4">
+                <h2 className="text-2xl font-semibold text-primary">Floor Plans</h2>
+                <div className="grid gap-4 sm:grid-cols-2">
                   {media.floorPlans.map((floorPlan, index) => {
                     const floorPlanUrl = floorPlan.url.startsWith('http')
                       ? floorPlan.url
                       : `/api/files/binary?path=${encodeURIComponent(floorPlan.url)}`
+                    
+                    const isPDF = floorPlan.url.includes('.pdf')
+                    const isImage = !isPDF
+
+                    const handleFloorPlanClick = () => {
+                      if (isImage) {
+                        // For images, open in viewer with floor plan flag
+                        setViewer({ type: 'image', index: 0, isFloorPlan: true })
+                      } else {
+                        // For PDFs, open in new tab
+                        window.open(floorPlanUrl, '_blank')
+                      }
+                    }
 
                     return (
-                      <figure
+                      <div
                         key={floorPlan.url}
-                        className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4"
+                        className={`flex items-center gap-4 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 ${
+                          isImage ? 'cursor-pointer hover:bg-[color:var(--surface-2)] transition-colors' : ''
+                        }`}
+                        onClick={isImage ? handleFloorPlanClick : undefined}
+                        role={isImage ? 'button' : undefined}
+                        tabIndex={isImage ? 0 : undefined}
+                        onKeyDown={isImage ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleFloorPlanClick()
+                          }
+                        } : undefined}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[color:var(--surface-border)]">
-                            <svg className="h-6 w-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-500)]/10">
+                          {isPDF ? (
+                            <svg className="h-7 w-7 text-[color:var(--accent-500)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-secondary truncate" title={floorPlan.name}>
-                              {floorPlan.name}
-                            </p>
-                            <p className="text-xs text-muted">
-                              {floorPlan.url.includes('.pdf') ? 'PDF Document' : 'Image File'}
-                            </p>
-                          </div>
-                          <a
-                            href={floorPlanUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center rounded-full bg-[color:var(--accent-500)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--accent-600)] transition-colors"
-                          >
-                            View
-                          </a>
+                          ) : (
+                            <svg className="h-7 w-7 text-[color:var(--accent-500)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          )}
                         </div>
-                      </figure>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-primary truncate">{floorPlan.name}</p>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              isPDF 
+                                ? 'bg-[color:var(--accent-500)]/10 text-[color:var(--accent-500)]' 
+                                : 'bg-[color:var(--accent-500)]/10 text-[color:var(--accent-500)]'
+                            }`}>
+                              {isPDF ? 'PDF' : 'Image'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted">
+                            {isPDF ? 'PDF Document' : 'Image File'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleFloorPlanClick()
+                          }}
+                          className="btn btn-primary text-sm"
+                        >
+                          Open
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
-              </div>
+              </section>
             )}
+          </div>
 
-          </section>
-
-          {/* Immersive Pipeline Status */}
-          <section className="space-y-6">
-            <header className="flex items-center justify-between">
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-[0.35em] text-muted">Pipeline configuration</p>
-                <h3 className="text-lg font-semibold text-primary">Immersive viewer</h3>
-                <p className="text-xs text-muted">3D interactive experience settings.</p>
-              </div>
-            </header>
-
-            <div className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`inline-flex h-3 w-3 rounded-full ${immersive.has3D ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                  <div>
-                    <p className="text-sm font-medium text-primary">
-                      {immersive.has3D ? '3D Pipeline Enabled' : 'Traditional Listing Only'}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {immersive.has3D 
-                        ? 'This listing supports interactive 3D viewing' 
-                        : 'This listing uses traditional gallery view only'
-                      }
-                    </p>
-                  </div>
-                </div>
-                <div className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  immersive.has3D 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {immersive.has3D ? '3D Ready' : 'Gallery Only'}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Media viewer modal (minimal, with arrows) */}
-          {viewer && (() => {
-            const list = viewer.type === 'image' ? media.images : media.videos
-            const current = list[viewer.index]
-            const src = viewer.type === 'image' ? toAbsolute(current as string) : toAbsolute((current as {url:string}).url)
-
-            return (
-              <div
-                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
-                role="dialog"
-                aria-modal="true"
-                onClick={closeViewer}
-              >
-                <div
-                  className="relative max-h-[90vh] w-full max-w-6xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {viewer.type === 'image' ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={src} alt="" className="mx-auto max-h-[90vh] w-auto max-w-full object-contain rounded-2xl" />
-                  ) : (
-                    <video
-                      src={src}
-                      className="mx-auto max-h-[90vh] w-auto max-w-full"
-                      controls
-                      autoPlay
-                    />
-                  )}
-
-                  {/* Close (icon) */}
-                  <button
-                    type="button"
-                    onClick={closeViewer}
-                    aria-label="Close viewer"
-                    className="absolute right-2 top-2 rounded-full bg-black/70 p-2 text-white hover:bg-black/80 focus:outline-none focus:ring-2 focus:ring-white/40"
-                  >
-                    <XMarkIcon className="h-5 w-5" />
+          {/* Right Column - Contact Card (Sticky) */}
+          <aside className="space-y-6">
+            <div className="sticky top-20 space-y-6">
+              {/* Contact/Inquiry Card */}
+              <section className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-lg">
+                <h3 className="text-xl font-semibold text-primary mb-4">Interested in this property?</h3>
+                <div className="space-y-4">
+                  <button className="btn btn-primary w-full justify-center text-base">
+                    Schedule a Viewing
                   </button>
+                  <button className="btn btn-secondary w-full justify-center text-base">
+                    Contact Agent
+                  </button>
+                  <button className="btn btn-outline w-full justify-center text-base">
+                    Request Info
+                  </button>
+                </div>
+                
+                <div className="mt-6 pt-6 border-t border-[color:var(--surface-border)] space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Property ID</span>
+                    <span className="font-medium text-primary">EST-{Math.floor(Math.random() * 100000)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Listed</span>
+                    <span className="font-medium text-primary">Just now</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted">Status</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                      <CheckBadgeIcon className="h-3 w-3" />
+                      Available
+                    </span>
+                  </div>
+                </div>
+              </section>
 
-                  {/* Bottom arrows */}
-                  {list.length > 1 && (
-                    <div className={`absolute inset-x-0 ${viewer.type === 'video' ? 'bottom-14' : 'bottom-3'} flex justify-center pointer-events-none`}>
-                      <div className="inline-flex items-center gap-2 rounded-full bg-black/60 px-2 py-1 pointer-events-auto">
-                        <button
-                          type="button"
-                          onClick={prevViewer}
-                          aria-label="Previous"
-                          className="rounded-full p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
-                        >
-                          <ChevronLeftIcon className="h-5 w-5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={nextViewer}
-                          aria-label="Next"
-                          className="rounded-full p-2 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
-                        >
-                          <ChevronRightIcon className="h-5 w-5" />
-                        </button>
-                      </div>
+              {/* 3D Virtual Tour Card */}
+              {immersive.has3D && (
+                <section className="rounded-2xl border-2 border-[color:var(--accent-500)] bg-gradient-to-br from-[color:var(--accent-500)]/5 to-transparent p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--accent-500)]">
+                      <CubeTransparentIcon className="h-7 w-7 text-white" />
                     </div>
+                    <div>
+                      <h3 className="font-semibold text-primary">3D Virtual Tour</h3>
+                      <p className="text-xs text-muted">Explore in 3D</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-secondary mb-4">
+                    Experience this property in immersive 3D. Walk through every room from the comfort of your home.
+                  </p>
+                  {immersive.viewerLink && (
+                    <Link href={immersive.viewerLink} className="btn btn-primary w-full justify-center">
+                      Launch 3D Tour
+                    </Link>
                   )}
-                </div>
-              </div>
-            )
-          })()}
+                </section>
+              )}
+
+              {/* Quick Stats */}
+              <section className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6">
+                <h3 className="font-semibold text-primary mb-4">Property Stats</h3>
+                <dl className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted">Total Media</dt>
+                    <dd className="font-medium text-primary">{media.images.length + media.videos.length} files</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted">Floor Plans</dt>
+                    <dd className="font-medium text-primary">{media.floorPlans.length} available</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted">Type</dt>
+                    <dd className="font-medium text-primary">{propertyType}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted">Location</dt>
+                    <dd className="font-medium text-primary">{source.city}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </aside>
         </div>
-
-        {/* Sidebar */}
-        <aside className="space-y-6">
-          <section className="surface-soft rounded-3xl border border-[color:var(--surface-border)] p-6 shadow-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Publish readiness</h3>
-            <dl className="mt-4 space-y-3 text-sm text-secondary">
-              <div className="flex items-center justify-between">
-                <dt>Details complete</dt>
-                <dd className="font-medium text-[color:var(--success-500)]">Ready</dd>
-              </div>
-              <div className="flex items-center justify-between">
-                <dt>Media assets</dt>
-                <dd>{media.images.length + media.videos.length} files</dd>
-              </div>
-              <div className="flex items-center justify-between">
-                <dt>Pricing</dt>
-                <dd>
-                  {pricing.currency} {pricing.basePrice}
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className="surface-soft space-y-4 rounded-3xl border border-[color:var(--surface-border)] p-6 shadow-sm">
-            <header className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.35em] text-muted">Immersive assets</p>
-              <h3 className="text-lg font-semibold text-primary">3D listing summary</h3>
-              <p className="text-xs text-muted">
-                {immersive.has3D
-                  ? "This listing includes processed 3D assets from the editor workflow."
-                  : "No 3D assets were attached to this listing."}
-              </p>
-            </header>
-
-            {immersive.has3D ? (
-              <div className="space-y-4 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--surface-2)]">
-                    <CubeTransparentIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-primary">Processed GLB</p>
-                    <p className="text-xs text-muted">{immersive.glbPath}</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted">
-                  <span>Processed at</span>
-                  <span>{immersive.processedAt}</span>
-                </div>
-                <Link href={immersive.viewerLink} className="btn btn-secondary w-full justify-center">
-                  Open immersive editor
-                </Link>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 text-center text-sm text-muted">
-                <PhotoIcon className="mx-auto h-10 w-10 text-[color:var(--accent-400)]" />
-                <p className="mt-3">No 3D media has been generated for this listing.</p>
-              </div>
-            )}
-          </section>
-        </aside>
       </div>
+
+      {/* Media viewer modal (minimal, with arrows) */}
+      {viewer && (() => {
+        let list, current, src
+        
+        if (viewer.isFloorPlan) {
+          // Handle floor plan images and PDFs
+          list = media.floorPlans
+          current = media.floorPlans[viewer.index]
+          src = current ? toAbsolute(current.url) : ''
+        } else {
+          // Handle regular images and videos
+          list = viewer.type === 'image' ? media.images : media.videos
+          current = list[viewer.index]
+          src = viewer.type === 'image' ? toAbsolute(current as string) : toAbsolute((current as {url:string}).url)
+        }
+
+        const isPdf = current && (
+          (typeof current === 'string' && current.includes('.pdf')) ||
+          (typeof current === 'object' && current.url && current.url.includes('.pdf'))
+        )
+
+        return (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+            role="dialog"
+            aria-modal="true"
+            onClick={closeViewer}
+          >
+            <div
+              className="relative max-h-[90vh] w-full max-w-6xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {isPdf ? (
+                // PDF viewer with fallback
+                <div className="w-full h-full">
+                  <iframe
+                    src={`${src}#toolbar=0&navpanes=0&scrollbar=1&zoom=FitH`}
+                    className="mx-auto max-h-[90vh] w-full max-w-full rounded"
+                    title="PDF Viewer"
+                    onError={() => {
+                      // Fallback: open in new tab if iframe fails
+                      window.open(src, '_blank')
+                    }}
+                  />
+                </div>
+              ) : viewer.type === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="" className="mx-auto max-h-[90vh] w-auto max-w-full object-contain rounded-2xl" />
+              ) : (
+                <video
+                  src={src}
+                  className="mx-auto max-h-[90vh] w-auto max-w-full rounded-2xl"
+                  controls
+                  autoPlay
+                />
+              )}
+
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={closeViewer}
+                aria-label="Close viewer"
+                className="absolute right-4 top-4 rounded-full bg-black/70 p-3 text-white hover:bg-black/90 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+
+              {/* Navigation arrows - only show for multiple items */}
+              {list.length > 1 && (
+                <div className={`absolute inset-x-0 ${viewer.type === 'video' ? 'bottom-20' : 'bottom-4'} flex justify-center pointer-events-none`}>
+                  <div className="inline-flex items-center gap-3 rounded-full bg-black/70 px-3 py-2 pointer-events-auto">
+                    <button
+                      type="button"
+                      onClick={prevViewer}
+                      aria-label="Previous"
+                      className="rounded-full p-2 text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
+                    >
+                      <ChevronLeftIcon className="h-6 w-6" />
+                    </button>
+                    <span className="text-sm text-white font-medium px-2">
+                      {viewer.index + 1} / {list.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={nextViewer}
+                      aria-label="Next"
+                      className="rounded-full p-2 text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 transition-colors"
+                    >
+                      <ChevronRightIcon className="h-6 w-6" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

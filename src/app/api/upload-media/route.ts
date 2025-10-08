@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    // Validate file type for images and videos
+    // Validate file type for images, videos, and documents
     const allowedTypes = [
       'image/jpeg',
       'image/jpg', 
@@ -27,15 +27,16 @@ export async function POST(request: NextRequest) {
       'video/mp4',
       'video/webm',
       'video/quicktime',
-      'video/avi'
+      'video/avi',
+      'application/pdf'
     ]
 
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi']
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov', '.avi', '.pdf']
     const extension = extname(file.name || '').toLowerCase()
     
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(extension)) {
       return NextResponse.json(
-        { error: `Unsupported file type. Allowed: images (jpg, png, gif, webp) and videos (mp4, webm, mov, avi)` },
+        { error: `Unsupported file type. Allowed: images (jpg, png, gif, webp), videos (mp4, webm, mov, avi), and documents (pdf)` },
         { status: 400 }
       )
     }

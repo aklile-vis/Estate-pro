@@ -159,7 +159,7 @@ export default function AgentUploadMediaPage() {
   }, [])
 
   // Modal/lightbox viewer state
-  type Viewer = { type: 'image' | 'video'; index: number } | null
+  type Viewer = { type: 'image' | 'video'; index: number; isFloorPlan?: boolean } | null
   const [viewer, setViewer] = useState<Viewer>(null)
 
   const closeViewer = useCallback(() => setViewer(null), [])
@@ -497,33 +497,85 @@ export default function AgentUploadMediaPage() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-3">
                     {floorPlans.map((fp, idx) => {
-                        const isPdf = fp.file?.type === 'application/pdf'
+                        const isPdf = fp.file?.type === 'application/pdf' || fp.url.includes('.pdf')
+                        const isImage = !isPdf
+
+                        const handleFloorPlanClick = () => {
+                          if (isImage) {
+                            // For images, open in viewer with floor plan flag
+                            setViewer({ type: 'image', index: 0, isFloorPlan: true })
+                          } else {
+                            // For PDFs, open in embedded viewer
+                            setViewer({ type: 'image', index: 0, isFloorPlan: true })
+                          }
+                        }
+
                         return (
                           <div
                             key={fp.url}
-                            className="relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4"
+                            className={`relative group overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 ${
+                              isImage ? 'cursor-pointer hover:bg-[color:var(--surface-2)] transition-colors' : 'cursor-pointer hover:bg-[color:var(--surface-2)] transition-colors'
+                            }`}
+                            onClick={handleFloorPlanClick}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                handleFloorPlanClick()
+                              }
+                            }}
                           >
                             <div className="flex items-center gap-3">
                               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[color:var(--surface-border)]">
-                                <DocumentIcon className="h-6 w-6 text-muted" />
+                                {isPdf ? (
+                                  <svg className="h-6 w-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-6 w-6 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-secondary truncate" title={fp.name}>
-                                  {fp.name}
-                                </p>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-medium text-secondary truncate" title={fp.name}>
+                                    {fp.name}
+                                  </p>
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    isPdf 
+                                      ? 'bg-[color:var(--accent-500)]/10 text-[color:var(--accent-500)]' 
+                                      : 'bg-[color:var(--accent-500)]/10 text-[color:var(--accent-500)]'
+                                  }`}>
+                                    {isPdf ? 'PDF' : 'Image'}
+                                  </span>
+                                </div>
                                 <p className="text-xs text-muted">
                                   {isPdf ? 'PDF Document' : 'Image File'}
                                 </p>
                               </div>
-                              <button
-                                type="button"
-                                className="inline-flex items-center rounded-full bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-opacity group-hover:opacity-100"
-                                onClick={(e) => { e.stopPropagation(); removeFloorPlanAt(idx) }}
-                                aria-label="Remove floor plan"
-                                title="Remove floor plan"
-                              >
-                                <XMarkIcon className="h-4 w-4" />
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleFloorPlanClick()
+                                  }}
+                                >
+                                  Open
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center rounded-full bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-opacity group-hover:opacity-100"
+                                  onClick={(e) => { e.stopPropagation(); removeFloorPlanAt(idx) }}
+                                  aria-label="Remove floor plan"
+                                  title="Remove floor plan"
+                                >
+                                  <XMarkIcon className="h-4 w-4" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )
@@ -556,9 +608,21 @@ export default function AgentUploadMediaPage() {
 
       {/* Media viewer modal (minimal) */}
       {viewer && (() => {
-        const list = viewer.type === 'image' ? images : videos
-        const current = list[viewer.index]
-        const src = current ? toAbsolute(current.url) : ''
+        let list, current, src
+        
+        if (viewer.isFloorPlan) {
+          // Handle floor plan images and PDFs
+          list = floorPlans
+          current = floorPlans[viewer.index]
+          src = current ? toAbsolute(current.url) : ''
+        } else {
+          // Handle regular images and videos
+          list = viewer.type === 'image' ? images : videos
+          current = list[viewer.index]
+          src = current ? toAbsolute(current.url) : ''
+        }
+
+        const isPdf = current && (current.file?.type === 'application/pdf' || current.url.includes('.pdf'))
 
         return (
           <div
@@ -571,7 +635,21 @@ export default function AgentUploadMediaPage() {
               className="relative max-h-[90vh] w-full max-w-6xl rounded"
               onClick={(e) => e.stopPropagation()}
             >
-              {viewer.type === 'image' ? (
+              {isPdf ? (
+                // PDF viewer with fallback
+                <div className="w-full h-full">
+                  <iframe
+                    src={`${src}#toolbar=0&navpanes=0&scrollbar=1&zoom=FitH`}
+                    className="mx-auto max-h-[90vh] w-full max-w-full rounded"
+                    title="PDF Viewer"
+                    onError={() => {
+                      // Fallback: open in new tab if iframe fails
+                      window.open(src, '_blank')
+                    }}
+                  />
+                </div>
+              ) : viewer.type === 'image' ? (
+                // Image viewer
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={src}
@@ -579,6 +657,7 @@ export default function AgentUploadMediaPage() {
                   className="mx-auto max-h-[90vh] w-auto max-w-full object-contain rounded-2xl"
                 />
               ) : (
+                // Video viewer
                 <video
                   src={src}
                   className="mx-auto max-h-[90vh] w-auto max-w-full"
