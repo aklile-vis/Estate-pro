@@ -668,7 +668,15 @@ export default function PublicListingPage() {
     )
   }
 
-  const location = [data.listing?.address, data.listing?.city].filter(Boolean).join(', ')
+  const location = (() => {
+    const parts = []
+    if (data.listing?.address) parts.push(data.listing.address)
+    if (data.listing?.subCity) parts.push(data.listing.subCity)
+    if (data.listing?.city && data.listing.city.toLowerCase() !== data.listing.subCity?.toLowerCase()) {
+      parts.push(data.listing.city)
+    }
+    return parts.join(', ')
+  })()
   const breakdown = priceDetails
 
   return (

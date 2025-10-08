@@ -4,6 +4,10 @@ import {
   ArrowTopRightOnSquareIcon,
   BuildingOffice2Icon,
   MapPinIcon,
+  HomeIcon,
+  WrenchScrewdriverIcon,
+  Square3Stack3DIcon,
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
@@ -11,21 +15,31 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
 import { formatPrice } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
 
 type Listing = {
   id: string
   title: string
+  description?: string | null
   address?: string | null
   city?: string | null
+  subCity?: string | null
+  bedrooms?: number | null
+  bathrooms?: number | null
+  areaSqm?: number | null
   basePrice: number
-  coverImage?: string | null
   currency?: string | null
+  coverImage?: string | null
+  has3D?: boolean
+  amenities?: string | null
+  features?: string | null
 }
 
 export default function ListingsIndexPage() {
   const [listings, setListings] = useState<Listing[]>([])
   const [status, setStatus] = useState('')
   const [query, setQuery] = useState('')
+  const { user, isAuthenticated } = useAuth()
 
   useEffect(() => {
     const load = async () => {
@@ -67,10 +81,12 @@ export default function ListingsIndexPage() {
               Explore immersive-ready inventory processed through EstatePro. Every listing includes a GLB model, IFC export, and customizable material library.
             </p>
           </div>
-          <Link href="/agent/upload" className="btn btn-primary whitespace-nowrap">
-            Publish your listing
-            <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-          </Link>
+          {isAuthenticated && user?.role === 'AGENT' && (
+            <Link href="/agent/upload" className="btn btn-primary whitespace-nowrap">
+              Publish your listing
+              <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+            </Link>
+          )}
         </div>
       </header>
 
@@ -108,36 +124,112 @@ export default function ListingsIndexPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-60px' }}
                 transition={{ duration: 0.45, delay: index * 0.05 }}
-                className="group overflow-hidden rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[var(--shadow-soft)]"
+                className="group overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-white shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Link href={`/listings/${listing.id}`} className="flex h-full flex-col">
-                  <div className="relative">
+                  {/* Image Section */}
+                  <div className="relative h-64 overflow-hidden">
                     <Image
                       alt={listing.title}
                       src={imageSrc}
                       width={640}
                       height={420}
-                      className="h-52 w-full object-cover transition duration-300 group-hover:scale-105"
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     />
-                    <div className="absolute left-6 top-6 inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-600)] px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                      <BuildingOffice2Icon className="h-4 w-4" />
-                      Immersive ready
+                    
+                    {/* Status Tags */}
+                    <div className="absolute left-4 top-4 flex flex-col gap-2">
+                      {listing.has3D ? (
+                        <div className="inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-600)] px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                          <Square3Stack3DIcon className="h-3 w-3" />
+                          Immersive Ready
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                          <BuildingOffice2Icon className="h-3 w-3" />
+                          Standard Listing
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex flex-1 flex-col gap-4 px-6 pb-6 pt-8 text-primary">
-                    <div>
-                      <h3 className="text-lg font-semibold group-hover:text-brand text-primary">{listing.title}</h3>
-                      <div className="mt-1 flex items-center gap-2 text-sm text-secondary">
-                        <MapPinIcon className="h-4 w-4" />
-                        {[listing.address, listing.city].filter(Boolean).join(', ') || 'Location to be announced'}
+
+                  {/* Content Section */}
+                  <div className="flex-1 p-6">
+                    {/* Title and Location */}
+                    <div className="mb-4">
+                      <h3 className="text-xl font-semibold text-gray-900 group-hover:text-[color:var(--brand-600)] transition-colors mb-2">
+                        {listing.title}
+                      </h3>
+                      <div className="space-y-1">
+                        {listing.address && (
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <MapPinIcon className="h-4 w-4" />
+                            <span>{listing.address}</span>
+                          </div>
+                        )}
+                        {(listing.subCity || listing.city) && (
+                          <div className="text-sm text-gray-500">
+                            {(() => {
+                              const parts = []
+                              if (listing.subCity) parts.push(listing.subCity)
+                              if (listing.city && listing.city.toLowerCase() !== listing.subCity?.toLowerCase()) {
+                                parts.push(listing.city)
+                              }
+                              return parts.join(', ')
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="text-sm font-semibold tracking-wide text-brand-strong">
-                      {formatPrice(listing.basePrice, 'ETB')}
+
+                    {/* Property Details */}
+                    <div className="mb-4 space-y-3">
+                      {/* Price */}
+                      <div className="flex items-center gap-2">
+                        <CurrencyDollarIcon className="h-5 w-5 text-[color:var(--brand-600)]" />
+                        <span className="text-xl font-bold text-gray-900">
+                          {formatPrice(listing.basePrice, listing.currency || 'ETB')}
+                        </span>
+                      </div>
+                      
+                      {/* Property Specs */}
+                      <div className="flex items-center gap-6 text-sm text-gray-600">
+                        {listing.bedrooms !== null && listing.bedrooms !== undefined && (
+                          <div className="flex items-center gap-1">
+                            <HomeIcon className="h-4 w-4" />
+                            <span className="font-medium">{listing.bedrooms}</span>
+                          </div>
+                        )}
+                        {listing.bathrooms !== null && listing.bathrooms !== undefined && (
+                          <div className="flex items-center gap-1">
+                            <WrenchScrewdriverIcon className="h-4 w-4" />
+                            <span className="font-medium">{listing.bathrooms}</span>
+                          </div>
+                        )}
+                        {listing.areaSqm && listing.areaSqm > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Square3Stack3DIcon className="h-4 w-4" />
+                            <span className="font-medium">{listing.areaSqm}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-auto flex items-center justify-between text-sm text-muted">
-                      <span>Launch experience</span>
-                      <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+
+                    {/* Description */}
+                    {listing.description && (
+                      <div className="mb-4">
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {listing.description}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Action Footer */}
+                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-100">
+                      <div className="text-sm text-gray-500">
+                        View Details
+                      </div>
+                      <ArrowTopRightOnSquareIcon className="h-4 w-4 text-gray-400 group-hover:text-[color:var(--brand-600)] transition-colors" />
                     </div>
                   </div>
                 </Link>

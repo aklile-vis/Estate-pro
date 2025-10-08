@@ -250,8 +250,8 @@ export default function AgentListingReviewPage() {
         basePrice: parseFloat(pricing.basePrice.replace(/,/g, '')), // Changed from 'price' to 'basePrice'
         currency: pricing.currency,
         address: location.split(', ')[0],
-        city: location.split(', ')[1],
-        subCity: draft?.subCity || '',
+        city: location.split(', ')[2] || location.split(', ')[1], // Use the last part as city
+        subCity: location.split(', ')[1] || draft?.subCity || '', // Use the middle part as subCity
         images: media.images,
         videos: media.videos.map(v => v.url),
         floorPlans: media.floorPlans,

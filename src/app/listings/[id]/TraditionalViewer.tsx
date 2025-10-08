@@ -1,18 +1,13 @@
 "use client"
 
-import Link from "next/link"
-import { useEffect, useState, useRef, type ReactNode } from "react"
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, useRef } from "react"
 
-import { useAuth } from '@/contexts/AuthContext'
 import {
-  CheckBadgeIcon,
-  ClipboardDocumentListIcon,
-  CubeTransparentIcon,
   MapPinIcon,
   PhotoIcon,
   PlayCircleIcon,
   TagIcon,
+  CubeTransparentIcon,
 } from "@heroicons/react/24/outline"
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid'
 
@@ -52,10 +47,6 @@ export type ListingReviewShape = {
 export default function TraditionalViewer({ listing }: { listing?: ListingUnitPayload | null }) {
   const [heroIndex, setHeroIndex] = useState(0)
   const [viewer, setViewer] = useState<{ type: 'image' | 'video'; index: number; isFloorPlan?: boolean } | null>(null)
-  const [isPublishing, setIsPublishing] = useState(false)
-  const [publishStatus, setPublishStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const router = useRouter()
-  const { token } = useAuth()
   const initialCoverSet = useRef(false)
 
   // Show loading state if no data is available yet
@@ -109,7 +100,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
           catch { return [] }
         })() : []),
         // Handle all image media types
-        ...(realUnit?.media?.filter(m => m.type === 'IMAGE').map(m => m.url) || [])
+        ...(realUnit?.media?.filter((m: any) => m.type === 'IMAGE').map((m: any) => m.url) || [])
       ].filter((url, index, arr) => arr.indexOf(url) === index), // Remove duplicates
       videos: [
         // Handle fileUpload.videos as both array and JSON string
@@ -118,7 +109,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
           try { return JSON.parse(realUnit.fileUpload.videos || '[]') } 
           catch { return [] }
         })() : []),
-        ...(realUnit?.media?.filter(m => m.type === 'VIDEO').map(m => ({ url: m.url, label: m.caption || 'Video Tour' })) || [])
+        ...(realUnit?.media?.filter((m: any) => m.type === 'VIDEO').map((m: any) => ({ url: m.url, label: m.caption || 'Video Tour' })) || [])
       ],
       floorPlans: [
         ...(realData.floorPlans ? (() => {
@@ -131,7 +122,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
           try { return JSON.parse(realUnit.fileUpload.floorPlans || '[]') } 
           catch { return [] }
         })() : []),
-        ...(realUnit?.media?.filter(m => m.type === 'DOCUMENT' && m.role === 'FLOORPLAN').map(m => ({ url: m.url, name: m.caption || 'Floor Plan' })) || [])
+        ...(realUnit?.media?.filter((m: any) => m.type === 'DOCUMENT' && m.role === 'FLOORPLAN').map((m: any) => ({ url: m.url, name: m.caption || 'Floor Plan' })) || [])
       ],
       coverImage: realData.coverImage || ''
     },
@@ -335,7 +326,14 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
                     <div className="space-y-1">
                       <div className="text-sm font-medium sm:text-base">{address}</div>
                       <div className="text-xs text-muted sm:text-sm">
-                        {subCity && city ? `${subCity}, ${city}` : city || subCity || ''}
+                        {(() => {
+                          const parts = []
+                          if (subCity) parts.push(subCity)
+                          if (city && city.toLowerCase() !== subCity?.toLowerCase()) {
+                            parts.push(city)
+                          }
+                          return parts.join(', ')
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -393,7 +391,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Amenities</h3>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {amenities.map((item) => (
+                    {amenities.map((item: any) => (
                       <div key={item} className="flex items-center gap-2 text-sm text-secondary">
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100">
                           <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -411,7 +409,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
                 <div className="space-y-3 pt-4 border-t border-[color:var(--surface-border)]">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Special Features</h3>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {features.map((item) => (
+                    {features.map((item: any) => (
                       <div key={item} className="flex items-center gap-2 text-sm text-secondary">
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100">
                           <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -517,6 +515,37 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
                     const isPDF = floorPlan.url.includes('.pdf')
                     const isImage = !isPDF
 
+                    // Extract filename from URL with better handling
+                    const extractFilename = (url: string) => {
+                      // If it's a direct filename, use it
+                      if (url.includes('/') && url.split('/').pop()?.includes('.')) {
+                        return url.split('/').pop()?.split('?')[0] || 'Unknown File'
+                      }
+                      // If it's a numeric ID or encoded path, try to decode or use a generic name
+                      const pathParts = url.split('/')
+                      const lastPart = pathParts[pathParts.length - 1]
+                      
+                      // If it looks like a numeric ID, create a descriptive name
+                      if (/^\d+$/.test(lastPart)) {
+                        return `Floor Plan ${lastPart}${isPDF ? '.pdf' : '.jpg'}`
+                      }
+                      
+                      // Try to decode URL-encoded filename
+                      try {
+                        const decoded = decodeURIComponent(lastPart)
+                        if (decoded.includes('.')) {
+                          return decoded
+                        }
+                      } catch (e) {
+                        // If decoding fails, continue with fallback
+                      }
+                      
+                      // Final fallback
+                      return `Floor Plan ${index + 1}${isPDF ? '.pdf' : '.jpg'}`
+                    }
+
+                    const filename = extractFilename(floorPlan.url)
+
                     const handleFloorPlanClick = () => {
                       if (isImage) {
                         openViewer('image', index, true)
@@ -555,7 +584,9 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-primary truncate">{floorPlan.name}</p>
+                            <p className="font-medium text-primary truncate">
+                              {floorPlan.name || filename}
+                            </p>
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                               isPDF 
                                 ? 'bg-[color:var(--accent-500)]/10 text-[color:var(--accent-500)]' 
