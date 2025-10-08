@@ -16,71 +16,17 @@ import {
 } from "@heroicons/react/24/outline"
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid'
 
-const mockListing = {
-  title: "Luxury Smart Condo",
-  subtitle: "Premium 3-bedroom residence in the heart of Bole",
-  status: "Draft",
-  pricing: {
-    basePrice: "950,000",
-    currency: "ETB",
-  },
-  propertyType: "Residential / Condo",
-  location: "123 Palm Avenue, Addis Ababa",
-  address: "123 Palm Avenue",
-  city: "Addis Ababa",
-  subCity: "Bole",
-  specs: {
-    bedrooms: 3,
-    bathrooms: 2,
-    areaSqm: 165,
-  },
-  description:
-    "Thoughtfully designed condo featuring open-plan living, floor-to-ceiling windows, and fully integrated smart home controls.",
-  amenities: ["Private balcony", "High-speed fiber", "Concierge", "Solar backup"],
-  features: ["24/7 Power Generator", "Underground Water Supply"],
-  media: {
-    images: [
-      "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1616594039964-30b227d047a5?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80",
-      "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=80",
-    ],
-    videos: [
-      {
-        url: "https://example.com/media/virtual-tour.mp4",
-        label: "Virtual walk-through",
-      },
-    ],
-    floorPlans: [
-      {
-        url: "https://example.com/media/floor-plan-1.pdf",
-        name: "Ground Floor Plan",
-      },
-      {
-        url: "https://example.com/media/floor-plan-2.jpg",
-        name: "First Floor Plan",
-      },
-    ],
-    coverImage: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80",
-  },
-  immersive: {
-    has3D: true,
-    glbPath: "models/condo_a.glb",
-    viewerLink: "/agent/editor/condo-a",
-    processedAt: "2025-10-01 18:32",
-  },
-}
 
 export default function AgentListingReviewPage() {
-  const [draft, setDraft] = useState<typeof mockListing | null>(null)
+  const [draft, setDraft] = useState<any>(null)
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('agent:reviewDraft')
       if (!raw) return
       const parsed = JSON.parse(raw)
-      // Basic shape guard and normalisation to match mockListing structure
-      const normalized: typeof mockListing = {
+      // Basic shape guard and normalisation
+      const normalized: any = {
         title: typeof parsed?.title === 'string' ? parsed.title : '',
         subtitle: typeof parsed?.subtitle === 'string' ? parsed.subtitle : '',
         status: 'Draft',
@@ -198,9 +144,21 @@ export default function AgentListingReviewPage() {
   }
   
 
-  const source = draft || mockListing
-  const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, features, media, immersive } =
-    source
+  if (!draft) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold text-gray-900 mb-4">No Draft Data</h1>
+          <p className="text-gray-600 mb-6">Please complete the upload process to review your listing.</p>
+          <Link href="/agent/upload/details" className="btn btn-primary">
+            Start Upload Process
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, features, media, immersive } = draft
 
   // Set hero index to cover image when media is available
   useEffect(() => {
@@ -506,9 +464,9 @@ export default function AgentListingReviewPage() {
                   <div className="flex gap-3 text-muted">
                     <MapPinIcon className="h-8 w-8 flex-shrink-0 mt-0.5" />
                     <div className="space-y-1">
-                      <div className="text-base font-medium">{source.address}</div>
+                      <div className="text-base font-medium">{draft.address}</div>
                       <div className="text-sm text-muted">
-                        {source.subCity && source.city ? `${source.subCity}, ${source.city}` : source.city || source.subCity || ''}
+                        {draft.subCity && draft.city ? `${draft.subCity}, ${draft.city}` : draft.city || draft.subCity || ''}
                       </div>
                     </div>
                   </div>
@@ -831,7 +789,7 @@ export default function AgentListingReviewPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <dt className="text-muted">Location</dt>
-                    <dd className="font-medium text-primary">{source.city}</dd>
+                    <dd className="font-medium text-primary">{draft.city}</dd>
                   </div>
                 </dl>
               </section>

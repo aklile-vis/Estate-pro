@@ -8,6 +8,7 @@ import {
   WrenchScrewdriverIcon,
   Square3Stack3DIcon,
   CurrencyDollarIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
@@ -113,7 +114,7 @@ export default function ListingsIndexPage() {
             console.log('Listing:', { id: listing.id, title: listing.title, coverImage: listing.coverImage })
             const imageSrc = listing.coverImage
               ? `/api/files/binary?path=${encodeURIComponent(listing.coverImage)}&listingId=${encodeURIComponent(listing.id)}`
-              : '/placeholder.jpg'
+              : null
             
             console.log('Image source for listing', listing.id, ':', imageSrc)
 
@@ -129,13 +130,22 @@ export default function ListingsIndexPage() {
                 <Link href={`/listings/${listing.id}`} className="flex h-full flex-col">
                   {/* Image Section */}
                   <div className="relative h-64 overflow-hidden">
-                    <Image
-                      alt={listing.title}
-                      src={imageSrc}
-                      width={640}
-                      height={420}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
+                    {imageSrc ? (
+                      <Image
+                        alt={listing.title}
+                        src={imageSrc}
+                        width={640}
+                        height={420}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gray-200 flex items-center justify-center">
+                        <div className="text-center text-gray-500">
+                          <PhotoIcon className="h-12 w-12 mx-auto mb-2" />
+                          <p className="text-sm">No Image Available</p>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Status Tags */}
                     <div className="absolute left-4 top-4 flex flex-col gap-2">

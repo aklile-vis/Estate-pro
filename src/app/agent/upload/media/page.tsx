@@ -17,7 +17,15 @@ export default function AgentUploadMediaPage() {
   const [images, setImages] = useState<ImageItem[]>([])
   const [videos, setVideos] = useState<VideoItem[]>([])
   const [floorPlans, setFloorPlans] = useState<FloorPlanItem[]>([])
+  const [showValidation, setShowValidation] = useState(false)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
+  
+  // Hide validation when images are uploaded
+  useEffect(() => {
+    if (images.length > 0 && showValidation) {
+      setShowValidation(false)
+    }
+  }, [images.length, showValidation])
   const videoInputRef = useRef<HTMLInputElement | null>(null)
   const floorPlanInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -200,6 +208,15 @@ export default function AgentUploadMediaPage() {
 
   // Save media data and navigate to next step
   const goTo3DStep = useCallback(() => {
+    // Validate that at least one image is uploaded
+    if (images.length === 0) {
+      setShowValidation(true)
+      return
+    }
+    
+    // Hide validation if requirements are met
+    setShowValidation(false)
+
     // Auto-set first image as cover if no cover is selected
     let processedImages = [...images]
     const hasCoverImage = images.some(img => img.isCover)
@@ -391,6 +408,13 @@ export default function AgentUploadMediaPage() {
                     })}
                   </div>
                 </div>
+              )}
+              
+              {/* Validation Message for Images */}
+              {showValidation && (
+                <p className="mt-1 text-xs text-red-500">
+                  Please upload at least one image before continuing.
+                </p>
               )}
             </div>
 
@@ -598,7 +622,7 @@ export default function AgentUploadMediaPage() {
           </button>
           <button 
             type="button" 
-            className="btn btn-primary" 
+            className="btn btn-primary"
             onClick={goTo3DStep}
           >
             Continue

@@ -5,6 +5,7 @@ import {
   ArrowRightIcon,
   BuildingOffice2Icon,
   MapPinIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
@@ -215,7 +216,7 @@ export default function HomePage() {
           {filteredListings.slice(0, 9).map((listing, index) => {
             const imageSrc = listing.coverImage
               ? `/api/files/binary?path=${encodeURIComponent(listing.coverImage)}&listingId=${encodeURIComponent(listing.id)}`
-              : '/placeholder.jpg'
+              : null
             const location = [listing.address, listing.city].filter(Boolean).join(', ')
 
             return (
@@ -229,13 +230,22 @@ export default function HomePage() {
               >
                 <Link href={`/listings/${listing.id}`} className="group flex h-full flex-col">
                   <div className="relative">
-                    <Image
-                      alt={listing.title}
-                      src={imageSrc}
-                      width={600}
-                      height={420}
-                      className="h-48 w-full object-cover transition duration-300 group-hover:scale-105"
-                    />
+                    {imageSrc ? (
+                      <Image
+                        alt={listing.title}
+                        src={imageSrc}
+                        width={600}
+                        height={420}
+                        className="h-48 w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="h-48 w-full bg-gray-200 flex items-center justify-center">
+                        <div className="text-center text-gray-500">
+                          <PhotoIcon className="h-8 w-8 mx-auto mb-1" />
+                          <p className="text-xs">No Image</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full border border-overlay bg-[color:var(--overlay-900)] px-3 py-1 text-[11px] font-semibold text-overlay shadow-sm">
                       <BuildingOffice2Icon className="h-4 w-4" />
                       Immersive ready

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import Link from 'next/link'
 
 import {
   MapPinIcon,
@@ -61,11 +62,25 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
     )
   }
 
-  // Use real data if available, otherwise fall back to mock
+  // Use real data if available, otherwise show no data message
   const realData = listing?.listing
   const realUnit = listing?.unit
   
-  const data = realData ? {
+  if (!realData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold text-gray-900 mb-4">No Listing Data</h1>
+          <p className="text-gray-600 mb-6">This listing is not available or has been removed.</p>
+          <Link href="/listings" className="btn btn-primary">
+            Browse Other Listings
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const data = {
     title: realData.title || 'Property Listing',
     subtitle: realData.description || 'Beautiful property for sale',
     pricing: { 
@@ -132,7 +147,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
       viewerLink: `/listings/${realData.id}`,
       processedAt: realData.updatedAt?.toString() || ''
     }
-  } : MOCK_REVIEW_LISTING
+  }
 
   const { title, subtitle, pricing, propertyType, address, city, subCity, specs, description, amenities, features, media, immersive } = data
 
@@ -808,52 +823,4 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
       })()}
     </div>
   )
-}
-
-// -------- Mock Review Listing ---------
-const MOCK_REVIEW_LISTING: ListingReviewShape = {
-  title: 'Luxury Smart Condo',
-  subtitle: 'Premium 3-bedroom residence in the heart of Bole',
-  status: 'Draft',
-  pricing: { basePrice: '950,000', currency: 'ETB' },
-  propertyType: 'Residential / Condo',
-  location: '123 Palm Avenue, Addis Ababa',
-  address: '123 Palm Avenue',
-  city: 'Addis Ababa',
-  subCity: 'Bole',
-  specs: { bedrooms: 3, bathrooms: 2, areaSqm: 165 },
-  description: 'Thoughtfully designed condo featuring open-plan living, floor-to-ceiling windows, and fully integrated smart home controls.',
-  amenities: ['Private balcony','High-speed fiber','Concierge','Solar backup'],
-  features: ['24/7 Power Generator', 'Underground Water Supply'],
-  media: {
-    images: [
-      'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1616594039964-30b227d047a5?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=80',
-    ],
-    videos: [
-      {
-        url: 'https://example.com/media/virtual-tour.mp4',
-        label: 'Virtual walk-through',
-      },
-    ],
-    floorPlans: [
-      {
-        url: 'https://example.com/media/floor-plan-1.pdf',
-        name: 'Ground Floor Plan',
-      },
-      {
-        url: 'https://example.com/media/floor-plan-2.jpg',
-        name: 'First Floor Plan',
-      },
-    ],
-    coverImage: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80',
-  },
-  immersive: {
-    has3D: true,
-    glbPath: 'models/condo_a.glb',
-    viewerLink: '/agent/editor/condo-a',
-    processedAt: '2025-10-01 18:32',
-  },
 }
