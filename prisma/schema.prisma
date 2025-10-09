@@ -206,6 +206,7 @@ model UnitListing {
   amenities   String?      // JSON string of amenities array
   features    String?      // JSON string of features array
   floorPlans  String?      // JSON string of floor plans array
+  propertyType String?     // Property type (e.g., "Apartment", "Villa", "Office")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 

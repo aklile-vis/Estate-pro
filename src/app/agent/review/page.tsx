@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -83,19 +83,6 @@ export default function AgentListingReviewPage() {
   type Viewer = { type: 'image' | 'video'; index: number; isFloorPlan?: boolean } | null
   const [viewer, setViewer] = useState<Viewer>(null)
 
-  const closeViewer = () => setViewer(null)
-  const nextViewer = () => {
-    if (!viewer) return
-    const list = viewer.type === 'image' ? media.images : media.videos
-    if (!list?.length) return
-    setViewer({ type: viewer.type, index: (viewer.index + 1) % list.length })
-  }
-  const prevViewer = () => {
-    if (!viewer) return
-    const list = viewer.type === 'image' ? media.images : media.videos
-    if (!list?.length) return
-    setViewer({ type: viewer.type, index: (viewer.index - 1 + list.length) % list.length })
-  }
 
   // Hero carousel navigation
   const nextHeroMedia = (e: React.MouseEvent) => {
@@ -122,7 +109,28 @@ export default function AgentListingReviewPage() {
     }
   }
 
-  // Keyboard + scroll lock while viewer is open
+
+  const onCardKeyDown = (e: React.KeyboardEvent, open: () => void) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
+  }
+  
+
+  // Media viewer functions - defined before early return to maintain hook order
+  const closeViewer = useCallback(() => setViewer(null), [])
+  const nextViewer = useCallback(() => {
+    if (!viewer || !draft?.media) return
+    const list = viewer.type === 'image' ? draft.media.images : draft.media.videos
+    if (!list?.length) return
+    setViewer({ type: viewer.type, index: (viewer.index + 1) % list.length })
+  }, [viewer, draft?.media?.images, draft?.media?.videos])
+  const prevViewer = useCallback(() => {
+    if (!viewer || !draft?.media) return
+    const list = viewer.type === 'image' ? draft.media.images : draft.media.videos
+    if (!list?.length) return
+    setViewer({ type: viewer.type, index: (viewer.index - 1 + list.length) % list.length })
+  }, [viewer, draft?.media?.images, draft?.media?.videos])
+
+  // Keyboard + scroll lock while viewer is open - defined before early return
   useEffect(() => {
     if (!viewer) return
     const onKey = (e: KeyboardEvent) => {
@@ -137,12 +145,22 @@ export default function AgentListingReviewPage() {
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
-  }, [viewer])
+  }, [viewer, closeViewer, nextViewer, prevViewer])
 
-  const onCardKeyDown = (e: React.KeyboardEvent, open: () => void) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
-  }
-  
+  // Set hero index to cover image when media is available - defined before early return
+  useEffect(() => {
+    if (draft?.media?.coverImage && draft?.media?.images?.length > 0) {
+      const coverIndex = draft.media.images.findIndex((img: string) => img === draft.media.coverImage)
+      if (coverIndex >= 0) {
+        setHeroIndex(coverIndex)
+      }
+    }
+  }, [draft?.media?.coverImage, draft?.media?.images])
+
+  // Router and auth hooks - defined before early return
+  const router = useRouter()
+  const { token } = useAuth()
+  const [isPublishing, setIsPublishing] = useState(false)
 
   if (!draft) {
     return (
@@ -158,27 +176,8 @@ export default function AgentListingReviewPage() {
     )
   }
 
-  const { title, subtitle, status, pricing, propertyType, location, specs, description, amenities, features, media, immersive } = draft
+  const { title, subtitle, pricing, propertyType, location, specs, description, amenities, features, media, immersive } = draft
 
-  // Set hero index to cover image when media is available
-  useEffect(() => {
-    if (media.coverImage && media.images.length > 0) {
-      const coverIndex = media.images.findIndex(img => img === media.coverImage)
-      if (coverIndex >= 0) {
-        setHeroIndex(coverIndex)
-      }
-    }
-  }, [media.coverImage, media.images])
-
-  const router = useRouter()
-  const { token } = useAuth()
-  const [isPublishing, setIsPublishing] = useState(false)
-
-  // Temporary function to clear session storage
-  const clearSessionStorage = () => {
-    sessionStorage.removeItem('agent:reviewDraft')
-    window.location.reload()
-  }
 
   const publishListing = async () => {
     if (!token) {
@@ -190,15 +189,12 @@ export default function AgentListingReviewPage() {
     setIsPublishing(true)
 
     try {
-      // Determine category and subtype from propertyType
-      let category: "Residential" | "Commercial" = "Residential"
+      // Extract property type from the stored format
       let subtype: string = propertyType.split(' / ')[1] || propertyType.split(' / ')[0] || 'Other'
 
       if (propertyType.includes('Commercial')) {
-        category = "Commercial"
         subtype = propertyType.split(' / ')[1] || 'Other Commercial'
       } else if (propertyType.includes('Residential')) {
-        category = "Residential"
         subtype = propertyType.split(' / ')[1] || 'Other Residential'
       }
 
@@ -211,11 +207,10 @@ export default function AgentListingReviewPage() {
         city: location.split(', ')[2] || location.split(', ')[1], // Use the last part as city
         subCity: location.split(', ')[1] || draft?.subCity || '', // Use the middle part as subCity
         images: media.images,
-        videos: media.videos.map(v => v.url),
+        videos: media.videos.map((v: any) => v.url),
         floorPlans: media.floorPlans,
         coverImage: media.coverImage,
-        category: category,
-        subtype: subtype,
+        propertyType: subtype, // Send the actual property type (e.g., "Apartment", "Villa")
         bedrooms: specs.bedrooms,
         bathrooms: specs.bathrooms,
         areaSqm: specs.areaSqm,
@@ -242,7 +237,7 @@ export default function AgentListingReviewPage() {
         throw new Error(errorData.error || 'Failed to publish listing')
       }
 
-      const result = await response.json()
+      await response.json()
       
       // Clear all upload data after successful publication
       sessionStorage.removeItem('agent:uploadStep1')
@@ -265,8 +260,8 @@ export default function AgentListingReviewPage() {
 
   // Combine images and videos for carousel
   const allMedia = [
-    ...media.images.map((img, index) => ({ type: 'image' as const, url: img, index })),
-    ...media.videos.map((video, index) => ({ type: 'video' as const, url: video.url, index, label: video.label }))
+    ...media.images.map((img: string, index: number) => ({ type: 'image' as const, url: img, index })),
+    ...media.videos.map((video: any, index: number) => ({ type: 'video' as const, url: video.url, index, label: video.label }))
   ]
 
   // Get current hero media based on carousel index
@@ -528,7 +523,7 @@ export default function AgentListingReviewPage() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Amenities</h3>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {amenities.map((item) => (
+                    {amenities.map((item: string) => (
                       <div key={item} className="flex items-center gap-2 text-sm text-secondary">
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100">
                           <CheckBadgeIcon className="h-4 w-4 text-green-600" />
@@ -544,7 +539,7 @@ export default function AgentListingReviewPage() {
                 <div className="space-y-3 pt-4 border-t border-[color:var(--surface-border)]">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Special Features</h3>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {features.map((item) => (
+                    {features.map((item: string) => (
                       <div key={item} className="flex items-center gap-2 text-sm text-secondary">
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100">
                           <CheckBadgeIcon className="h-4 w-4 text-blue-600" />
@@ -561,7 +556,7 @@ export default function AgentListingReviewPage() {
             <section className="space-y-4">
               <h2 className="text-2xl font-semibold text-primary">Property Gallery</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {media.images.map((path, index) => {
+                {media.images.map((path: string, index: number) => {
                   const imageUrl = path.startsWith('http') 
                     ? path 
                     : `/api/files/binary?path=${encodeURIComponent(path)}`
@@ -598,7 +593,7 @@ export default function AgentListingReviewPage() {
               <section className="space-y-4">
                 <h2 className="text-2xl font-semibold text-primary">Video Tours</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {media.videos.map((video, index) => (
+                  {media.videos.map((video: any, index: number) => (
                     <figure
                       key={video.url}
                       role="button"
@@ -634,7 +629,7 @@ export default function AgentListingReviewPage() {
               <section className="space-y-4">
                 <h2 className="text-2xl font-semibold text-primary">Floor Plans</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {media.floorPlans.map((floorPlan, index) => {
+                  {media.floorPlans.map((floorPlan: any) => {
                     const floorPlanUrl = floorPlan.url.startsWith('http')
                       ? floorPlan.url
                       : `/api/files/binary?path=${encodeURIComponent(floorPlan.url)}`
@@ -899,22 +894,3 @@ export default function AgentListingReviewPage() {
   )
 }
 
-interface DetailBlockProps {
-  icon: ReactNode
-  label: string
-  value: string
-}
-
-function DetailBlock({ icon, label, value }: DetailBlockProps) {
-  return (
-    <div className="space-y-2 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
-      <div className="flex items-center gap-3 text-muted">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--surface-2)] text-[color:var(--accent-500)]">
-          {icon}
-        </span>
-        <span className="text-xs uppercase tracking-wide">{label}</span>
-      </div>
-      <p className="text-lg font-semibold text-primary">{value}</p>
-    </div>
-  )
-}
