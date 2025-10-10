@@ -9,8 +9,29 @@ import {
   PlayCircleIcon,
   TagIcon,
   CubeTransparentIcon,
+  ArrowsPointingOutIcon,
 } from "@heroicons/react/24/outline"
 import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid'
+
+// Inline icons for property specs (match listings page)
+const BedIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <path d="M3 10v8M21 18V12a3 3 0 00-3-3H8a3 3 0 00-3 3" />
+    <path d="M3 14h18" />
+  </svg>
+)
+
+const BathIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <path d="M7 10V8a2 2 0 114 0v2" />
+    <path d="M4 13h16v2a3 3 0 01-3 3H7a3 3 0 01-3-3v-2z" />
+    <path d="M7 18v2M17 18v2" />
+  </svg>
+)
+
+const AreaIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <ArrowsPointingOutIcon {...props} />
+)
 
 export type ListingUnitPayload = {
   listing: any
@@ -365,27 +386,21 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
             <section className="grid grid-cols-3 gap-2 rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 sm:gap-4 sm:p-6">
               <div className="space-y-2 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--accent-500)]/10 sm:h-12 sm:w-12">
-                  <svg className="h-5 w-5 text-[color:var(--accent-500)] sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                  </svg>
+                  <BedIcon className="h-8 w-8 text-[color:var(--accent-500)]" />
                 </div>
                 <p className="text-xl font-bold text-primary sm:text-2xl">{specs.bedrooms}</p>
                 <p className="text-xs text-muted sm:text-sm">Bedrooms</p>
               </div>
               <div className="space-y-2 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--accent-500)]/10 sm:h-12 sm:w-12">
-                  <svg className="h-5 w-5 text-[color:var(--accent-500)] sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
-                  </svg>
+                  <BathIcon className="h-8 w-8 text-[color:var(--accent-500)]" />
                 </div>
                 <p className="text-xl font-bold text-primary sm:text-2xl">{specs.bathrooms}</p>
                 <p className="text-xs text-muted sm:text-sm">Bathrooms</p>
               </div>
               <div className="space-y-2 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--accent-500)]/10 sm:h-12 sm:w-12">
-                  <svg className="h-5 w-5 text-[color:var(--accent-500)] sm:h-6 sm:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
+                  <AreaIcon className="h-8 w-8 text-[color:var(--accent-500)]" />
                 </div>
                 <p className="text-xl font-bold text-primary sm:text-2xl">{specs.areaSqm}</p>
                 <p className="text-xs text-muted sm:text-sm">Sqm</p>

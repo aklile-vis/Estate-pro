@@ -172,6 +172,11 @@ a {
   color: rgba(155, 132, 106, 0.7);
 }
 
+/* Inputs with a leading icon */
+.input.input-with-icon {
+  padding-left: 2.25rem; /* matches pl-9 for icon spacing */
+}
+
 .card {
   @apply rounded-3xl border p-6;
   background: var(--surface-1);

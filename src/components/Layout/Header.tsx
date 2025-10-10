@@ -11,7 +11,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -25,6 +25,9 @@ const navigation = [
 export default function Header() {
   const { user, logout } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const profileMenuRefDesktop = useRef<HTMLDivElement>(null)
+  const profileMenuRefMobile = useRef<HTMLDivElement>(null)
 
   const initials = useMemo(() => {
     if (!user?.name) return 'EP'
@@ -34,6 +37,27 @@ export default function Header() {
       .map((segment) => segment.charAt(0).toUpperCase())
       .join('')
   }, [user?.name])
+
+  const isAgent = useMemo(() => user?.role === 'AGENT' || user?.role === 'ADMIN', [user?.role])
+
+  // Close profile menu on outside click or Escape
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as Node
+      const insideDesktop = profileMenuRefDesktop.current?.contains(t)
+      const insideMobile = profileMenuRefMobile.current?.contains(t)
+      if (!insideDesktop && !insideMobile) setIsProfileMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsProfileMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [])
 
   return (
     <header className="surface-header sticky inset-x-0 top-0 z-50 backdrop-blur-xl">
@@ -75,33 +99,57 @@ export default function Header() {
                   <BellIcon className="h-4 w-4" />
                   Alerts
                 </button>
-                <div className="flex items-center gap-3 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2">
-                  {user.avatar ? (
-                    <Image
-                      alt={user.name ?? user.email ?? 'User avatar'}
-                      className="h-9 w-9 rounded-full object-cover"
-                      height={36}
-                      src={user.avatar}
-                      width={36}
-                    />
-                  ) : (
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--sand-500)]/20 text-sm font-semibold text-secondary">
-                      {initials}
-                    </span>
-                  )}
-                  <div className="text-sm text-secondary">
-                    <div className="font-semibold text-primary">{user.name}</div>
-                    <div className="flex items-center gap-2 text-[11px] text-muted">
-                      <span className="uppercase tracking-wide">{user.role === 'AGENT' ? 'Agent' : 'Buyer'}</span>
+                <div ref={profileMenuRefDesktop} className="relative">
+                  <button
+                    aria-haspopup="menu"
+                    aria-expanded={isProfileMenuOpen}
+                    type="button"
+                    onClick={() => setIsProfileMenuOpen((o) => !o)}
+                    className="flex items-center gap-3 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-600)]"
+                  >
+                    {user.avatar ? (
+                      <Image
+                        alt={user.name ?? user.email ?? 'User avatar'}
+                        className="h-9 w-9 rounded-full object-cover"
+                        height={36}
+                        src={user.avatar}
+                        width={36}
+                      />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--sand-500)]/20 text-sm font-semibold text-secondary">
+                        {initials}
+                      </span>
+                    )}
+                    <div className="text-sm text-secondary">
+                      <div className="font-semibold text-primary">{user.name}</div>
+                      <div className="flex items-center gap-2 text-[11px] text-muted">
+                        <span className="uppercase tracking-wide">{user.role === 'AGENT' ? 'Agent' : 'Buyer'}</span>
+                      </div>
+                    </div>
+                  </button>
+                  {isProfileMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-[calc(100%+8px)] z-50 w-44 overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[var(--shadow-soft-raised)]"
+                    >
+                      <Link
+                        role="menuitem"
+                        href="/profile"
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-secondary hover:bg-[color:var(--surface-hover)] hover:text-primary"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      >
+                        Profile
+                      </Link>
                       <button
-                        className="text-[11px] uppercase tracking-wide text-muted transition hover:text-primary"
-                        onClick={logout}
+                        role="menuitem"
                         type="button"
+                        onClick={() => { setIsProfileMenuOpen(false); logout() }}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-secondary hover:bg-[color:var(--surface-hover)] hover:text-primary"
                       >
                         Sign out
                       </button>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -118,13 +166,52 @@ export default function Header() {
 
           <div className="flex items-center gap-3 lg:hidden">
             {user ? (
-              <button
-                className="rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-2 text-secondary"
-                onClick={logout}
-                type="button"
-              >
-                <BellIcon className="h-5 w-5" />
-              </button>
+              <div ref={profileMenuRefMobile} className="relative">
+                <button
+                  aria-haspopup="menu"
+                  aria-expanded={isProfileMenuOpen}
+                  type="button"
+                  onClick={() => setIsProfileMenuOpen((o) => !o)}
+                  className="inline-flex items-center justify-center rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-0 focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-600)]"
+                >
+                  {user.avatar ? (
+                    <Image
+                      alt={user.name ?? user.email ?? 'User avatar'}
+                      className="h-8 w-8 rounded-full object-cover"
+                      height={32}
+                      src={user.avatar}
+                      width={32}
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--sand-500)]/20 text-xs font-semibold text-secondary">
+                      {initials}
+                    </span>
+                  )}
+                </button>
+                {isProfileMenuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+8px)] z-50 w-44 overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[var(--shadow-soft-raised)]"
+                  >
+                    <Link
+                      role="menuitem"
+                      href="/profile"
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-secondary hover:bg-[color:var(--surface-hover)] hover:text-primary"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      role="menuitem"
+                      type="button"
+                      onClick={() => { setIsProfileMenuOpen(false); logout() }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-secondary hover:bg-[color:var(--surface-hover)] hover:text-primary"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <Link href="/login" className="btn btn-secondary px-3 py-1 text-sm">
                 Sign In
@@ -166,9 +253,11 @@ export default function Header() {
                   ))}
                 </nav>
                 {user ? (
-                  <button className="btn btn-secondary w-full" onClick={logout} type="button">
-                    Sign out
-                  </button>
+                  <div className="flex flex-col gap-3">
+                    <button className="btn btn-secondary w-full" onClick={logout} type="button">
+                      Sign out
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex flex-col gap-3">
                     <Link href="/login" className="btn btn-secondary w-full" onClick={() => setIsMenuOpen(false)}>

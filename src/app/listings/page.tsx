@@ -4,8 +4,7 @@ import {
   ArrowTopRightOnSquareIcon,
   BuildingOffice2Icon,
   MapPinIcon,
-  HomeIcon,
-  WrenchScrewdriverIcon,
+  ArrowsPointingOutIcon,
   Square3Stack3DIcon,
   CurrencyDollarIcon,
   PhotoIcon,
@@ -18,10 +17,31 @@ import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState, useRef } from 'react'
 
 import { formatPrice } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+
+// Inline icons for bed, bath, and area to better reflect specs
+const BedIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <path d="M3 10v8M21 18V12a3 3 0 00-3-3H8a3 3 0 00-3 3" />
+    <path d="M3 14h18" />
+  </svg>
+)
+
+const BathIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <path d="M7 10V8a2 2 0 114 0v2" />
+    <path d="M4 13h16v2a3 3 0 01-3 3H7a3 3 0 01-3-3v-2z" />
+    <path d="M7 18v2M17 18v2" />
+  </svg>
+)
+
+const AreaIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <ArrowsPointingOutIcon {...props} />
+)
 
 type Listing = {
   id: string
@@ -89,6 +109,7 @@ const BED_OPTIONS = ['Studio', '1', '2', '3', '4', '5', '6', '7', '8+'] as const
 const BATH_OPTIONS = ['1', '2', '3', '4', '5', '6+'] as const
 
 export default function ListingsIndexPage() {
+  const searchParams = useSearchParams()
   const [listings, setListings] = useState<Listing[]>([])
   const [status, setStatus] = useState('')
   const [filters, setFilters] = useState<Filters>({
@@ -113,6 +134,12 @@ export default function ListingsIndexPage() {
   const [propertyCategory, setPropertyCategory] = useState<'Residential' | 'Commercial'>('Residential')
   const bedBathRef = useRef<HTMLDivElement>(null)
   const propertyTypeRef = useRef<HTMLDivElement>(null)
+  const [showHas3DDropdown, setShowHas3DDropdown] = useState(false)
+  const has3DRef = useRef<HTMLDivElement>(null)
+  const [showCityDropdown, setShowCityDropdown] = useState(false)
+  const cityRef = useRef<HTMLDivElement>(null)
+  const [showPriceDropdown, setShowPriceDropdown] = useState(false)
+  const priceRef = useRef<HTMLDivElement>(null)
   const { user, isAuthenticated } = useAuth()
 
   useEffect(() => {
@@ -138,6 +165,38 @@ export default function ListingsIndexPage() {
     load()
   }, [])
 
+  // Initialize filters from URL query params (from Home page)
+  useEffect(() => {
+    if (!searchParams) return
+    const q = searchParams.get('query') || ''
+    const minPrice = searchParams.get('minPrice') || ''
+    const maxPrice = searchParams.get('maxPrice') || ''
+    const minBedsParam = searchParams.get('minBedrooms')
+    const minBathsParam = searchParams.get('minBathrooms')
+    const minBeds = minBedsParam ? Number(minBedsParam) : NaN
+    const minBaths = minBathsParam ? Number(minBathsParam) : NaN
+
+    setFilters(prev => ({
+      ...prev,
+      query: q,
+      minPrice,
+      maxPrice,
+      bedrooms: Number.isFinite(minBeds)
+        ? (BED_OPTIONS.filter(opt => {
+            if (opt === 'Studio') return 0 >= minBeds
+            if (opt === '8+') return 8 >= minBeds
+            return Number(opt) >= minBeds
+          }) as unknown as string[])
+        : prev.bedrooms,
+      bathrooms: Number.isFinite(minBaths)
+        ? (BATH_OPTIONS.filter(opt => {
+            if (opt === '6+') return 6 >= minBaths
+            return Number(opt) >= minBaths
+          }) as unknown as string[])
+        : prev.bathrooms,
+    }))
+  }, [searchParams])
+
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
@@ -151,6 +210,15 @@ export default function ListingsIndexPage() {
       }
       if (propertyTypeRef.current && !propertyTypeRef.current.contains(event.target as Node)) {
         setShowPropertyTypeDropdown(false)
+      }
+      if (has3DRef.current && !has3DRef.current.contains(event.target as Node)) {
+        setShowHas3DDropdown(false)
+      }
+      if (priceRef.current && !priceRef.current.contains(event.target as Node)) {
+        setShowPriceDropdown(false)
+      }
+      if (cityRef.current && !cityRef.current.contains(event.target as Node)) {
+        setShowCityDropdown(false)
       }
     }
 
@@ -373,7 +441,7 @@ export default function ListingsIndexPage() {
         </div>
       </header>
 
-      <div className="glass space-y-6 border border-[color:var(--surface-border)] p-6">
+      <div className="glass relative z-[200] space-y-6 border border-[color:var(--surface-border)] p-6">
         {/* Search and Controls */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
@@ -384,9 +452,9 @@ export default function ListingsIndexPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {/* Search Input */}
             <div className="relative w-full sm:w-72">
-              <MapPinIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <MapPinIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <input
-                className="input pl-9"
+                className="input input-with-icon"
                 placeholder="Search by address, city, or keyword"
                 value={filters.query}
                 onChange={(event) => updateFilter('query', event.target.value)}
@@ -447,24 +515,68 @@ export default function ListingsIndexPage() {
             </div>
             
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Price Range */}
+              {/* Price Range (Dropdown) */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-primary">Price Range</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={filters.minPrice}
-                    onChange={(e) => updateFilter('minPrice', e.target.value)}
-                    className="input text-sm"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={filters.maxPrice}
-                    onChange={(e) => updateFilter('maxPrice', e.target.value)}
-                    className="input text-sm"
-                  />
+                <label className="text-sm font-medium text-primary">Price</label>
+                <div className="relative" ref={priceRef}>
+                  <button
+                    onClick={() => setShowPriceDropdown(!showPriceDropdown)}
+                    className={`w-full input text-left flex items-center justify-between ${(filters.minPrice || filters.maxPrice) ? 'text-[color:var(--accent-500)]' : 'text-gray-500'}`}
+                  >
+                    {(() => {
+                      const min = filters.minPrice?.trim()
+                      const max = filters.maxPrice?.trim()
+                      if (min && max) return `${min} - ${max}`
+                      if (min) return `Min ${min}`
+                      if (max) return `Max ${max}`
+                      return 'Select Price'
+                    })()}
+                    <svg className={`h-4 w-4 transition-transform ${showPriceDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showPriceDropdown && (
+                    <div className="absolute top-full left-0 z-[9999] mt-2 w-72 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-lg">
+                      <div className="p-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="number"
+                            placeholder="Min"
+                            value={filters.minPrice}
+                            onChange={(e) => updateFilter('minPrice', e.target.value)}
+                            className="input text-sm"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Max"
+                            value={filters.maxPrice}
+                            onChange={(e) => updateFilter('maxPrice', e.target.value)}
+                            className="input text-sm"
+                          />
+                        </div>
+
+                        <div className="flex justify-between pt-2 border-t border-[color:var(--surface-border)]">
+                          <button
+                            onClick={() => {
+                              updateFilter('minPrice', '')
+                              updateFilter('maxPrice', '')
+                              setShowPriceDropdown(false)
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-[color:var(--accent-500)] border border-[color:var(--accent-500)] rounded-lg hover:bg-[color:var(--accent-500)]/5"
+                          >
+                            Reset
+                          </button>
+                          <button
+                            onClick={() => setShowPriceDropdown(false)}
+                            className="px-4 py-2 text-sm font-medium text-white bg-[color:var(--accent-500)] rounded-lg hover:bg-[color:var(--accent-500)]/90"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -486,7 +598,7 @@ export default function ListingsIndexPage() {
                   </button>
                   
                   {showPropertyTypeDropdown && (
-                    <div className="absolute top-full left-0 z-50 mt-2 w-80 rounded-xl border border-gray-200 bg-white shadow-lg">
+                    <div className="absolute top-full left-0 z-[9999] mt-2 w-80 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-lg">
                       <div className="p-4">
                         {/* Tabs */}
                         <div className="flex border-b border-gray-200 mb-4">
@@ -580,7 +692,7 @@ export default function ListingsIndexPage() {
                   </button>
                   
                   {showBedBathDropdown && (
-                    <div className="absolute top-full left-0 z-50 mt-2 w-80 rounded-xl border border-gray-200 bg-white shadow-lg">
+                    <div className="absolute top-full left-0 z-[9999] mt-2 w-80 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-lg">
                       <div className="p-4">
                         {/* Beds Section */}
                         <div className="mb-4">
@@ -646,61 +758,130 @@ export default function ListingsIndexPage() {
                 </div>
               </div>
               
-              {/* City */}
+              {/* City (Themed Dropdown) */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-primary">City</label>
-                <select
-                  value={filters.city || ''}
-                  onChange={(e) => updateFilter('city', e.target.value)}
-                  className="input"
-                >
-                  <option value="">All Cities</option>
-                  {getUniqueCities().map(city => (
-                    <option key={city} value={city || ''}>{city}</option>
-                  ))}
-                </select>
+                <div className="relative" ref={cityRef}>
+                  <button
+                    onClick={() => setShowCityDropdown(!showCityDropdown)}
+                    className={`w-full input text-left flex items-center justify-between ${filters.city ? 'text-[color:var(--accent-500)]' : 'text-gray-500'}`}
+                  >
+                    {filters.city || 'All Cities'}
+                    <svg className={`h-4 w-4 transition-transform ${showCityDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showCityDropdown && (
+                    <div className="absolute top-full left-0 z-[9999] mt-2 w-64 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-lg">
+                      <div className="p-2 space-y-1">
+                        <button
+                          onClick={() => { updateFilter('city', ''); setShowCityDropdown(false) }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
+                            !filters.city ? 'bg-[color:var(--surface-strong)] text-primary border border-[color:var(--surface-strong-border)]' : 'bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-hover)]'
+                          }`}
+                        >
+                          All Cities
+                        </button>
+                        {getUniqueCities().map(city => (
+                          <button
+                            key={city}
+                            onClick={() => { updateFilter('city', city || ''); setShowCityDropdown(false) }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition ${
+                              filters.city === city ? 'bg-[color:var(--surface-strong)] text-primary border border-[color:var(--surface-strong-border)]' : 'bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-hover)]'
+                            }`}
+                          >
+                            {city}
+                          </button>
+                        ))}
+                        <div className="flex justify-between pt-2 border-t border-[color:var(--surface-border)]">
+                          <button
+                            onClick={() => { updateFilter('city', ''); setShowCityDropdown(false) }}
+                            className="px-4 py-2 text-sm font-medium text-[color:var(--accent-500)] border border-[color:var(--accent-500)] rounded-lg hover:bg-[color:var(--accent-500)]/5"
+                          >
+                            Reset
+                          </button>
+                          <button
+                            onClick={() => setShowCityDropdown(false)}
+                            className="px-4 py-2 text-sm font-medium text-white bg-[color:var(--accent-500)] rounded-lg hover:bg-[color:var(--accent-500)]/90"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 3D Filter - Dropdown (in-grid) */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-primary">3D Tour</label>
+                <div className="relative" ref={has3DRef}>
+                  <button
+                    onClick={() => setShowHas3DDropdown(!showHas3DDropdown)}
+                    className={`w-full input text-left flex items-center justify-between ${filters.has3D ? 'text-[color:var(--accent-500)]' : 'text-gray-500'}`}
+                  >
+                    {filters.has3D === 'yes' ? '3D Available' : filters.has3D === 'no' ? 'Standard Only' : 'Any'}
+                    <svg className={`h-4 w-4 transition-transform ${showHas3DDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showHas3DDropdown && (
+                    <div className="absolute top-full left-0 z-[9999] mt-2 w-64 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-lg">
+                      <div className="p-4 space-y-2">
+                      <button
+                        onClick={() => updateFilter('has3D', '')}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                          filters.has3D === '' ? 'bg-[color:var(--surface-strong)] text-primary border border-[color:var(--surface-strong-border)]' : 'bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-hover)]'
+                        }`}
+                      >
+                        Any
+                      </button>
+                      <button
+                        onClick={() => updateFilter('has3D', 'yes')}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                          filters.has3D === 'yes' ? 'bg-[color:var(--surface-strong)] text-primary border border-[color:var(--surface-strong-border)]' : 'bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-hover)]'
+                        }`}
+                      >
+                        3D Available
+                      </button>
+                      <button
+                        onClick={() => updateFilter('has3D', 'no')}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                          filters.has3D === 'no' ? 'bg-[color:var(--surface-strong)] text-primary border border-[color:var(--surface-strong-border)]' : 'bg-[color:var(--surface-1)] text-secondary hover:bg-[color:var(--surface-hover)]'
+                        }`}
+                      >
+                        Standard Only
+                      </button>
+
+                        {/* Actions */}
+                        <div className="flex justify-between pt-3 border-t border-[color:var(--surface-border)]">
+                          <button
+                            onClick={() => {
+                              updateFilter('has3D', '')
+                              setShowHas3DDropdown(false)
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-[color:var(--accent-500)] border border-[color:var(--accent-500)] rounded-lg hover:bg-[color:var(--accent-500)]/5"
+                          >
+                            Reset
+                          </button>
+                          <button
+                            onClick={() => setShowHas3DDropdown(false)}
+                            className="px-4 py-2 text-sm font-medium text-white bg-[color:var(--accent-500)] rounded-lg hover:bg-[color:var(--accent-500)]/90"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
-            {/* 3D Filter */}
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-primary">3D Virtual Tour</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="has3D"
-                    value=""
-                    checked={filters.has3D === ''}
-                    onChange={(e) => updateFilter('has3D', e.target.value)}
-                    className="text-[color:var(--accent-500)]"
-                  />
-                  <span className="text-sm">Any</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="has3D"
-                    value="yes"
-                    checked={filters.has3D === 'yes'}
-                    onChange={(e) => updateFilter('has3D', e.target.value)}
-                    className="text-[color:var(--accent-500)]"
-                  />
-                  <span className="text-sm">3D Available</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="has3D"
-                    value="no"
-                    checked={filters.has3D === 'no'}
-                    onChange={(e) => updateFilter('has3D', e.target.value)}
-                    className="text-[color:var(--accent-500)]"
-                  />
-                  <span className="text-sm">Standard Only</span>
-                </label>
-              </div>
-            </div>
+            
           </motion.div>
         )}
 
@@ -902,19 +1083,19 @@ export default function ListingsIndexPage() {
                         <div className="flex items-center gap-6 text-sm text-gray-600">
                           {listing.bedrooms !== null && listing.bedrooms !== undefined && (
                             <div className="flex items-center gap-1">
-                              <HomeIcon className="h-4 w-4" />
+                              <BedIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
                               <span className="font-medium">{listing.bedrooms}</span>
                             </div>
                           )}
                           {listing.bathrooms !== null && listing.bathrooms !== undefined && (
                             <div className="flex items-center gap-1">
-                              <WrenchScrewdriverIcon className="h-4 w-4" />
+                              <BathIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
                               <span className="font-medium">{listing.bathrooms}</span>
                             </div>
                           )}
                           {listing.areaSqm && listing.areaSqm > 0 && (
                             <div className="flex items-center gap-1">
-                              <Square3Stack3DIcon className="h-4 w-4" />
+                              <AreaIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
                               <span className="font-medium">{listing.areaSqm}</span>
                             </div>
                           )}
@@ -1090,19 +1271,19 @@ export default function ListingsIndexPage() {
                         <div className="flex items-center gap-6 text-sm text-gray-600">
                           {listing.bedrooms !== null && listing.bedrooms !== undefined && (
                             <div className="flex items-center gap-1">
-                              <HomeIcon className="h-4 w-4" />
+                              <BedIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
                               <span className="font-medium">{listing.bedrooms}</span>
                             </div>
                           )}
                           {listing.bathrooms !== null && listing.bathrooms !== undefined && (
                             <div className="flex items-center gap-1">
-                              <WrenchScrewdriverIcon className="h-4 w-4" />
+                              <BathIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
                               <span className="font-medium">{listing.bathrooms}</span>
                             </div>
                           )}
                           {listing.areaSqm && listing.areaSqm > 0 && (
                             <div className="flex items-center gap-1">
-                              <Square3Stack3DIcon className="h-4 w-4" />
+                              <AreaIcon className="h-6 w-6 text-[color:var(--accent-500)]" />
                               <span className="font-medium">{listing.areaSqm}</span>
                             </div>
                           )}
