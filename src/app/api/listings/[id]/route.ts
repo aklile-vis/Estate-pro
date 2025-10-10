@@ -66,12 +66,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         description: body.description ?? undefined,
         address: body.address ?? undefined,
         city: body.city ?? undefined,
+        subCity: body.subCity ?? undefined,
         bedrooms: body.bedrooms ?? undefined,
         bathrooms: body.bathrooms ?? undefined,
         areaSqm: body.areaSqm ?? undefined,
         basePrice: body.basePrice != null ? parseFloat(body.basePrice) : undefined,
         coverImage: body.coverImage ?? undefined,
         isPublished: body.isPublished ?? undefined,
+        propertyType: body.propertyType ?? undefined,
       }
     })
     return NextResponse.json(updated)

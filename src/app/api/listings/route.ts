@@ -77,8 +77,8 @@ export async function POST(request: NextRequest) {
       features: body.features && Array.isArray(body.features) ? JSON.stringify(body.features) : null,
       // Store floor plans as JSON string
       floorPlans: body.floorPlans && Array.isArray(body.floorPlans) ? JSON.stringify(body.floorPlans) : null,
-      // TODO: Add propertyType field once Prisma client is regenerated
-      // propertyType: body.propertyType ?? null,
+      // Add property type field
+      propertyType: body.propertyType ?? null,
     }
 
     let targetUnitId = body.unitId

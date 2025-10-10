@@ -87,7 +87,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
       basePrice: realData.basePrice?.toString() || '0', 
       currency: realData.currency || 'ETB' 
     },
-    propertyType: 'Residential Property', // Could be derived from unit data
+    propertyType: realData.propertyType || 'Property',
     address: realData.address || 'Address not specified',
     city: realData.city || '',
     subCity: realData.subCity || '',
