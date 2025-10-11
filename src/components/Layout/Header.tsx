@@ -7,6 +7,7 @@ import {
   HomeIcon,
   HeartIcon,
   BellIcon,
+  BuildingOffice2Icon,
 } from '@heroicons/react/24/outline'
 import { AnimatePresence, motion } from 'framer-motion'
 import Image from 'next/image'
@@ -39,6 +40,10 @@ export default function Header() {
   }, [user?.name])
 
   const isAgent = useMemo(() => user?.role === 'AGENT' || user?.role === 'ADMIN', [user?.role])
+  const visibleNavigation = useMemo(
+    () => navigation.filter((item) => item.href !== '/agent' || isAgent),
+    [isAgent]
+  )
 
   // Close profile menu on outside click or Escape
   useEffect(() => {
@@ -77,7 +82,7 @@ export default function Header() {
           </Link>
 
           <nav className="hidden items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-2 py-1 shadow-sm md:flex">
-            {navigation.map((item) => (
+            {visibleNavigation.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -91,10 +96,17 @@ export default function Header() {
           <div className="hidden flex-1 items-center justify-end gap-4 lg:flex">
             {user ? (
               <div className="flex items-center gap-3">
-                <button className="btn btn-secondary hidden xl:flex">
-                  <HeartIcon className="h-4 w-4" />
-                  Saved
-                </button>
+                {isAgent ? (
+                  <Link href="/agent/my-listings" className="btn btn-secondary hidden xl:flex">
+                    <BuildingOffice2Icon className="h-4 w-4" />
+                    My Listings
+                  </Link>
+                ) : (
+                  <Link href="/saved" className="btn btn-secondary hidden xl:flex">
+                    <HeartIcon className="h-4 w-4" />
+                    Saved
+                  </Link>
+                )}
                 <button className="btn btn-secondary hidden xl:flex">
                   <BellIcon className="h-4 w-4" />
                   Alerts
@@ -140,6 +152,7 @@ export default function Header() {
                       >
                         Profile
                       </Link>
+                      {null}
                       <button
                         role="menuitem"
                         type="button"
@@ -201,6 +214,7 @@ export default function Header() {
                     >
                       Profile
                     </Link>
+                    {null}
                     <button
                       role="menuitem"
                       type="button"
@@ -241,7 +255,7 @@ export default function Header() {
                   <input className="input pl-9" placeholder="Search the marketplace" type="search" />
                 </div>
                 <nav className="flex flex-col gap-2">
-                  {navigation.map((item) => (
+                  {visibleNavigation.map((item) => (
                     <Link
                       key={item.href}
                       className="rounded-2xl border border-transparent px-4 py-3 text-sm font-semibold text-secondary transition hover:border-[color:var(--surface-border-strong)] hover:bg-[color:var(--surface-hover)] hover:text-primary"

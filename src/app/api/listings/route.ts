@@ -138,6 +138,18 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Best-effort: mark creator using raw SQL for SQLite without migrations
+    try {
+      await prisma.$executeRawUnsafe("ALTER TABLE unit_listings ADD COLUMN createdById TEXT")
+    } catch {}
+    try {
+      await prisma.$executeRawUnsafe(
+        'UPDATE unit_listings SET createdById = ? WHERE id = ? AND (createdById IS NULL OR createdById = \"\")',
+        auth.user.id,
+        (listing as any).id
+      )
+    } catch {}
+
     // Create Media entries for images and videos
     if (body.images && Array.isArray(body.images) && body.images.length > 0) {
       const imageMedia = body.images.map((url: string, index: number) => ({

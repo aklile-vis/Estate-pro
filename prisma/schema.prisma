@@ -28,6 +28,7 @@ model User {
   materialLibraries MaterialLibrary[]
   exportLogs        ExportLog[]
   Media             Media[]
+  savedListings     SavedListing[]
 
   @@map("users")
 }
@@ -225,8 +226,21 @@ model UnitListing {
   propertyType String?     // Property type (e.g., "Apartment", "Villa", "Office")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  savedBy     SavedListing[]
 
   @@map("unit_listings")
+}
+
+model SavedListing {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  listingId String
+  listing   UnitListing @relation(fields: [listingId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, listingId])
+  @@map("saved_listings")
 }
 
 model UnitMaterialWhitelist {

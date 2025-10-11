@@ -34,10 +34,11 @@ export default function ProfilePage() {
   // Section navigation (left sidebar)
   const [activeSection, setActiveSection] = useState<string>('overview')
   const sectionIds = useMemo(() => {
+    const isAgentRole = user?.role === 'AGENT' || user?.role === 'ADMIN'
     const base = ['overview', 'details', 'security']
-    return (user?.role === 'AGENT' || user?.role === 'ADMIN')
-      ? ['overview', 'details', 'agency', 'security', 'shortcuts']
-      : base
+    return isAgentRole
+      ? ['overview', 'details', 'agency', 'security', 'my-listings', 'shortcuts']
+      : [...base, 'saved']
   }, [user?.role])
 
   useEffect(() => {
@@ -186,6 +187,40 @@ export default function ProfilePage() {
 
   const isAgent = user.role === 'AGENT' || user.role === 'ADMIN'
 
+  // Saved and My Listings data
+  const [savedList, setSavedList] = useState<Array<{ id: string; title: string }>>([])
+  const [savedStatus, setSavedStatus] = useState('')
+  const [myListings, setMyListings] = useState<Array<{ id: string; unitId?: string; title: string; isPublished?: boolean }>>([])
+  const [myStatus, setMyStatus] = useState('')
+
+  useEffect(() => {
+    const loadSaved = async () => {
+      setSavedStatus('Loading…')
+      try {
+        const r = await fetch('/api/saved', { cache: 'no-store' })
+        const rows = await r.json()
+        if (!r.ok) { setSavedStatus(rows?.error || 'Failed to load'); return }
+        setSavedList(Array.isArray(rows) ? rows.map((l: any) => ({ id: String(l.id), title: String(l.title || 'Untitled') })) : [])
+        setSavedStatus('')
+      } catch { setSavedStatus('Failed to load') }
+    }
+    if (!isAgent && activeSection === 'saved') void loadSaved()
+  }, [activeSection, isAgent])
+
+  useEffect(() => {
+    const loadMine = async () => {
+      setMyStatus('Loading…')
+      try {
+        const r = await fetch('/api/listings/mine', { cache: 'no-store' })
+        const rows = await r.json()
+        if (!r.ok) { setMyStatus(rows?.error || 'Failed to load'); return }
+        setMyListings(Array.isArray(rows) ? rows.map((l: any) => ({ id: String(l.id), unitId: l.unitId, title: String(l.title || 'Untitled'), isPublished: !!l.isPublished })) : [])
+        setMyStatus('')
+      } catch { setMyStatus('Failed to load') }
+    }
+    if (isAgent && activeSection === 'my-listings') void loadMine()
+  }, [activeSection, isAgent])
+
   return (
     <div className="container max-w-6xl space-y-8">
       <div className="flex items-center justify-between">
@@ -211,6 +246,8 @@ export default function ProfilePage() {
                     {id === 'details' && 'Profile Details'}
                     {id === 'agency' && 'Agency'}
                     {id === 'security' && 'Security'}
+                    {id === 'saved' && 'Saved'}
+                    {id === 'my-listings' && 'My Listings'}
                     {id === 'shortcuts' && 'Agent Shortcuts'}
                   </button>
                 </li>
@@ -243,6 +280,54 @@ export default function ProfilePage() {
                   <div className="text-xs uppercase tracking-wide text-muted">{user.role}</div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {!isAgent && activeSection === 'saved' && (
+            <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
+              <h2 className="mb-4 text-lg font-semibold text-primary">Saved Listings</h2>
+              {savedStatus && <div className="text-sm text-secondary">{savedStatus}</div>}
+              {!savedStatus && savedList.length === 0 && (
+                <div className="text-sm text-secondary">You haven’t saved any listings yet.</div>
+              )}
+              {!savedStatus && savedList.length > 0 && (
+                <ul className="divide-y divide-[color:var(--surface-border)]">
+                  {savedList.map((l) => (
+                    <li key={l.id} className="py-3 flex items-center justify-between">
+                      <div className="text-sm text-primary truncate pr-3">{l.title}</div>
+                      <Link href={`/listings/${l.id}`} className="btn btn-secondary btn-sm">Open</Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {isAgent && activeSection === 'my-listings' && (
+            <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
+              <h2 className="mb-4 text-lg font-semibold text-primary">My Listings</h2>
+              {myStatus && <div className="text-sm text-secondary">{myStatus}</div>}
+              {!myStatus && myListings.length === 0 && (
+                <div className="text-sm text-secondary">No listings yet. Publish from the Units dashboard.</div>
+              )}
+              {!myStatus && myListings.length > 0 && (
+                <ul className="divide-y divide-[color:var(--surface-border)]">
+                  {myListings.map((l) => (
+                    <li key={l.id} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.isPublished ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'}`}>{l.isPublished ? 'Published' : 'Draft'}</span>
+                        <span className="text-sm text-primary truncate max-w-[28ch]">{l.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {l.unitId && (
+                          <Link href={`/agent/units/${encodeURIComponent(l.unitId)}/publish`} className="btn btn-secondary btn-sm">Manage</Link>
+                        )}
+                        <Link href={`/listings/${l.id}`} className="btn btn-primary btn-sm">Open</Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

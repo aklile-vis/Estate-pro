@@ -376,16 +376,50 @@ export default function ListingsIndexPage() {
     })
   }
 
-  const toggleFavorite = (listingId: string) => {
+  // Load saved listings for authenticated users
+  useEffect(() => {
+    let cancelled = false
+    const loadSaved = async () => {
+      if (!isAuthenticated) { setFavorites(new Set()); return }
+      try {
+        const r = await fetch('/api/saved', { cache: 'no-store' })
+        if (!r.ok) return
+        const rows = await r.json()
+        if (cancelled) return
+        const ids = Array.isArray(rows) ? rows.map((l: any) => String(l.id)) : []
+        setFavorites(new Set(ids))
+      } catch {}
+    }
+    void loadSaved()
+    return () => { cancelled = true }
+  }, [isAuthenticated])
+
+  const toggleFavorite = async (listingId: string) => {
+    const isFav = favorites.has(listingId)
+    // Optimistic update
     setFavorites(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(listingId)) {
-        newSet.delete(listingId)
-      } else {
-        newSet.add(listingId)
-      }
-      return newSet
+      const next = new Set(prev)
+      if (isFav) next.delete(listingId); else next.add(listingId)
+      return next
     })
+    try {
+      if (isFav) {
+        await fetch(`/api/saved/${listingId}`, { method: 'DELETE' })
+      } else {
+        await fetch('/api/saved', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listingId })
+        })
+      }
+    } catch {
+      // Revert on failure
+      setFavorites(prev => {
+        const next = new Set(prev)
+        if (isFav) next.add(listingId); else next.delete(listingId)
+        return next
+      })
+    }
   }
 
   const getUniqueCities = () => {
