@@ -347,6 +347,15 @@ export default function ListingsIndexPage() {
     }))
   }
 
+  // Clear only bed and bath selections (used by dropdown Reset)
+  const clearBedBathFilters = () => {
+    setFilters(prev => ({
+      ...prev,
+      bedrooms: [],
+      bathrooms: []
+    }))
+  }
+
   const togglePropertyTypeFilter = (propertyType: string) => {
     setFilters(prev => ({
       ...prev,
