@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { formatPrice } from '@/lib/utils'
 
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -49,7 +50,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return
-    setName(user.name || '')
+    setName(user?.name || '')
     // Load profile from backend
     ;(async () => {
       try {
@@ -177,7 +178,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (isLoading || !user) {
+  const showProfileLoading = isLoading || !user; if (false) {
     return (
       <div className="container flex min-h-[50vh] items-center justify-center">
         <div className="text-secondary">Loading profile…</div>
@@ -185,12 +186,12 @@ export default function ProfilePage() {
     )
   }
 
-  const isAgent = user.role === 'AGENT' || user.role === 'ADMIN'
+  const isAgent = user?.role === 'AGENT' || user?.role === 'ADMIN'
 
   // Saved and My Listings data
-  const [savedList, setSavedList] = useState<Array<{ id: string; title: string }>>([])
+  const [savedList, setSavedList] = useState<Array<{ id: string; title: string; coverImage?: string | null; basePrice?: number; currency?: string | null }>>([])
   const [savedStatus, setSavedStatus] = useState('')
-  const [myListings, setMyListings] = useState<Array<{ id: string; unitId?: string; title: string; isPublished?: boolean }>>([])
+  const [myListings, setMyListings] = useState<Array<{ id: string; unitId?: string; title: string; isPublished?: boolean; coverImage?: string | null; basePrice?: number; currency?: string | null }>>([])
   const [myStatus, setMyStatus] = useState('')
 
   useEffect(() => {
@@ -200,7 +201,16 @@ export default function ProfilePage() {
         const r = await fetch('/api/saved', { cache: 'no-store' })
         const rows = await r.json()
         if (!r.ok) { setSavedStatus(rows?.error || 'Failed to load'); return }
-        setSavedList(Array.isArray(rows) ? rows.map((l: any) => ({ id: String(l.id), title: String(l.title || 'Untitled') })) : [])
+        setSavedList(Array.isArray(rows)
+          ? rows.map((l: any) => ({
+              id: String(l.id),
+              title: String(l.title || 'Untitled'),
+              coverImage: l.coverImage ?? null,
+              basePrice: typeof l.basePrice === 'number' ? l.basePrice : undefined,
+              currency: typeof l.currency === 'string' ? l.currency : undefined,
+            }))
+          : []
+        )
         setSavedStatus('')
       } catch { setSavedStatus('Failed to load') }
     }
@@ -214,12 +224,31 @@ export default function ProfilePage() {
         const r = await fetch('/api/listings/mine', { cache: 'no-store' })
         const rows = await r.json()
         if (!r.ok) { setMyStatus(rows?.error || 'Failed to load'); return }
-        setMyListings(Array.isArray(rows) ? rows.map((l: any) => ({ id: String(l.id), unitId: l.unitId, title: String(l.title || 'Untitled'), isPublished: !!l.isPublished })) : [])
+        setMyListings(Array.isArray(rows)
+          ? rows.map((l: any) => ({
+              id: String(l.id),
+              unitId: l.unitId,
+              title: String(l.title || 'Untitled'),
+              isPublished: !!l.isPublished,
+              coverImage: l.coverImage ?? null,
+              basePrice: typeof l.basePrice === 'number' ? l.basePrice : undefined,
+              currency: typeof l.currency === 'string' ? l.currency : undefined,
+            }))
+          : []
+        )
         setMyStatus('')
       } catch { setMyStatus('Failed to load') }
     }
     if (isAgent && activeSection === 'my-listings') void loadMine()
   }, [activeSection, isAgent])
+
+  if (showProfileLoading) {
+    return (
+      <div className="container flex min-h-[50vh] items-center justify-center">
+        <div className="text-secondary">Loading profile…</div>
+      </div>
+    )
+  }
 
   return (
     <div className="container max-w-6xl space-y-8">
@@ -261,12 +290,12 @@ export default function ProfilePage() {
           {activeSection === 'overview' && (
             <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
               <div className="flex items-center gap-4">
-                {(!avatarRemoved && (initialAvatar || user.avatar)) ? (
+                {(!avatarRemoved && (initialAvatar || user?.avatar)) ? (
                   <Image
-                    alt={user.name ?? user.email ?? 'User avatar'}
+                    alt={user?.name ?? user?.email ?? 'User avatar'}
                     className="h-14 w-14 rounded-full object-cover"
                     height={56}
-                    src={(initialAvatar || (user.avatar as string))}
+                    src={(initialAvatar || (user?.avatar as string))}
                     width={56}
                   />
                 ) : (
@@ -276,8 +305,8 @@ export default function ProfilePage() {
                 )}
                 <div className="flex flex-col gap-1">
                   <div className="text-lg font-semibold text-primary">{name || 'Unnamed User'}</div>
-                  <div className="text-sm text-secondary">{user.email}</div>
-                  <div className="text-xs uppercase tracking-wide text-muted">{user.role}</div>
+                  <div className="text-sm text-secondary">{user?.email}</div>
+                  <div className="text-xs uppercase tracking-wide text-muted">{user?.role}</div>
                 </div>
               </div>
             </div>
@@ -285,48 +314,83 @@ export default function ProfilePage() {
 
           {!isAgent && activeSection === 'saved' && (
             <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-              <h2 className="mb-4 text-lg font-semibold text-primary">Saved Listings</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-primary">Saved Listings</h2>
+                <Link href="/saved" className="btn btn-secondary btn-sm">Go to Saved</Link>
+              </div>
               {savedStatus && <div className="text-sm text-secondary">{savedStatus}</div>}
               {!savedStatus && savedList.length === 0 && (
                 <div className="text-sm text-secondary">You haven’t saved any listings yet.</div>
               )}
               {!savedStatus && savedList.length > 0 && (
-                <ul className="divide-y divide-[color:var(--surface-border)]">
-                  {savedList.map((l) => (
-                    <li key={l.id} className="py-3 flex items-center justify-between">
-                      <div className="text-sm text-primary truncate pr-3">{l.title}</div>
-                      <Link href={`/listings/${l.id}`} className="btn btn-secondary btn-sm">Open</Link>
-                    </li>
-                  ))}
-                </ul>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {savedList.map((l) => {
+                    const imageSrc = l.coverImage ? `/api/files/binary?path=${encodeURIComponent(l.coverImage)}&listingId=${encodeURIComponent(l.id)}` : null
+                    return (
+                      <Link key={l.id} href={`/listings/${l.id}`} className="group rounded-2xl border border-[color:var(--surface-border)] bg-white shadow-sm hover:shadow-md transition overflow-hidden">
+                        <div className="h-28 bg-gray-100">
+                          {imageSrc ? (
+                            <Image alt={l.title} src={imageSrc} width={320} height={112} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[11px] text-gray-500">No Image</div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <div className="truncate text-sm font-medium text-primary">{l.title}</div>
+                          {typeof l.basePrice === 'number' && (
+                            <div className="text-[12px] text-secondary">{formatPrice(l.basePrice, l.currency || 'ETB')}</div>
+                          )}
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
               )}
             </div>
           )}
 
           {isAgent && activeSection === 'my-listings' && (
             <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-              <h2 className="mb-4 text-lg font-semibold text-primary">My Listings</h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-primary">My Listings</h2>
+                <Link href="/agent/my-listings" className="btn btn-secondary btn-sm">Go to My Listings</Link>
+              </div>
               {myStatus && <div className="text-sm text-secondary">{myStatus}</div>}
               {!myStatus && myListings.length === 0 && (
                 <div className="text-sm text-secondary">No listings yet. Publish from the Units dashboard.</div>
               )}
               {!myStatus && myListings.length > 0 && (
-                <ul className="divide-y divide-[color:var(--surface-border)]">
-                  {myListings.map((l) => (
-                    <li key={l.id} className="py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.isPublished ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'}`}>{l.isPublished ? 'Published' : 'Draft'}</span>
-                        <span className="text-sm text-primary truncate max-w-[28ch]">{l.title}</span>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {myListings.map((l) => {
+                    const imageSrc = l.coverImage ? `/api/files/binary?path=${encodeURIComponent(l.coverImage)}&listingId=${encodeURIComponent(l.id)}` : null
+                    return (
+                      <div key={l.id} className="group rounded-2xl border border-[color:var(--surface-border)] bg-white shadow-sm overflow-hidden">
+                        <Link href={`/listings/${l.id}`} className="block">
+                          <div className="relative h-28 bg-gray-100">
+                            {imageSrc ? (
+                              <Image alt={l.title} src={imageSrc} width={320} height={112} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[11px] text-gray-500">No Image</div>
+                            )}
+                            <span className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${l.isPublished ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'}`}>{l.isPublished ? 'Published' : 'Draft'}</span>
+                          </div>
+                          <div className="p-3">
+                            <div className="truncate text-sm font-medium text-primary">{l.title}</div>
+                            {typeof l.basePrice === 'number' && (
+                              <div className="text-[12px] text-secondary">{formatPrice(l.basePrice, l.currency || 'ETB')}</div>
+                            )}
+                          </div>
+                        </Link>
+                        <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-2">
+                          {l.unitId && (
+                            <Link href={`/agent/units/${encodeURIComponent(l.unitId)}/publish`} className="btn btn-secondary btn-sm">Manage</Link>
+                          )}
+                          <Link href={`/listings/${l.id}`} className="btn btn-primary btn-sm">Open</Link>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {l.unitId && (
-                          <Link href={`/agent/units/${encodeURIComponent(l.unitId)}/publish`} className="btn btn-secondary btn-sm">Manage</Link>
-                        )}
-                        <Link href={`/listings/${l.id}`} className="btn btn-primary btn-sm">Open</Link>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                    )
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -341,12 +405,12 @@ export default function ProfilePage() {
                 <>
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      {(!avatarRemoved && (avatarPreview || initialAvatar || user.avatar)) ? (
+                      {(!avatarRemoved && (avatarPreview || initialAvatar || user?.avatar)) ? (
                         <Image
-                          alt={user.name ?? user.email ?? 'User avatar'}
+                          alt={user?.name ?? user?.email ?? 'User avatar'}
                           className="h-20 w-20 rounded-full object-cover"
                           height={80}
-                          src={(avatarPreview || initialAvatar || (user.avatar as string))}
+                          src={(avatarPreview || initialAvatar || (user?.avatar as string))}
                           width={80}
                         />
                       ) : (
@@ -357,7 +421,7 @@ export default function ProfilePage() {
                       <div className="flex items-center gap-2">
                         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
                         <button type="button" className="btn btn-secondary" onClick={onPickAvatar}>Change Photo</button>
-                        {(!avatarRemoved && (avatarPreview || initialAvatar || user.avatar)) && (
+                        {(!avatarRemoved && (avatarPreview || initialAvatar || user?.avatar)) && (
                           <button
                             type="button"
                             className="btn btn-secondary"
@@ -380,7 +444,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-secondary">Email</label>
-                      <input className="input" value={user.email} readOnly />
+                      <input className="input" value={user?.email} readOnly />
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-secondary">Phone</label>
@@ -499,8 +563,8 @@ export default function ProfilePage() {
 
             <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 text-sm text-secondary shadow-[var(--shadow-soft)]">
               <div className="font-semibold text-primary">Account</div>
-              <div className="mt-2">{user.email}</div>
-              <div className="mt-1 uppercase text-[11px] tracking-wide text-muted">{user.role}</div>
+              <div className="mt-2">{user?.email}</div>
+              <div className="mt-1 uppercase text-[11px] tracking-wide text-muted">{user?.role}</div>
               {lastSaved && (
                 <div className="mt-3 text-[11px] text-muted">Last saved: {new Date(lastSaved).toLocaleString()}</div>
               )}
@@ -511,3 +575,5 @@ export default function ProfilePage() {
     </div>
   )
 }
+
+
