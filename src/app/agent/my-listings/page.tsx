@@ -7,11 +7,12 @@ import {
   Square3Stack3DIcon,
   CurrencyDollarIcon,
   PhotoIcon,
+  EllipsisVerticalIcon,
 } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { formatPrice } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -33,6 +34,21 @@ export default function MyListingsPage() {
   const { isAuthenticated, user } = useAuth()
   const [listings, setListings] = useState<Listing[]>([])
   const [status, setStatus] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null)
+  const menuRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null)
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (!menuOpenFor) return
+      const ref = menuRefs.current[menuOpenFor]
+      if (ref && !ref.contains(target)) setMenuOpenFor(null)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuOpenFor])
 
   useEffect(() => {
     const load = async () => {
@@ -50,6 +66,32 @@ export default function MyListingsPage() {
     if (isAuthenticated) void load()
   }, [isAuthenticated])
 
+  const openDeletePrompt = (listing: Listing) => {
+    setMenuOpenFor(null)
+    setConfirm({ id: listing.id, title: listing.title })
+  }
+
+  const performDelete = async () => {
+    if (!confirm?.id) return
+    const id = confirm.id
+    setDeletingId(id)
+    setStatus('')
+    try {
+      const res = await fetch(`/api/listings/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error((data as any)?.error || 'Failed to delete listing')
+      }
+      setListings((prev) => prev.filter((l) => l.id !== id))
+      setConfirm(null)
+    } catch (err) {
+      const message = (err as Error)?.message || 'Failed to delete listing'
+      setStatus(message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f7f1e8] p-6 text-[#2f2013]">
       <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -66,7 +108,7 @@ export default function MyListingsPage() {
         )}
 
         {!status && listings.length === 0 && (
-          <div className="rounded-3xl border border-[#d9c6b5] bg-[#fefbf7] p-6 text-sm text-[#7b6652] shadow-[0_12px_30px_rgba(59,42,28,0.08)]">
+          <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 text-sm text-[var(--text-secondary)] shadow-[0_12px_30px_rgba(59,42,28,0.08)]">
             You don’t have any listings yet. Publish one from the Units dashboard.
           </div>
         )}
@@ -93,6 +135,61 @@ export default function MyListingsPage() {
                   </span>
                 </div>
 
+                {/* Type badge + menu (outside Link to avoid nested anchors) */}
+                <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+                  {listing.has3D ? (
+                    <div className="inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-600)] px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                      <Square3Stack3DIcon className="h-3 w-3" />
+                      Immersive Ready
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1 rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                      <BuildingOffice2Icon className="h-3 w-3" />
+                      Standard Listing
+                    </div>
+                  )}
+
+                  {/* Quick actions menu */}
+                  <div className="relative" ref={(el) => { menuRefs.current[listing.id] = el }}>
+                    <button
+                      type="button"
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpenFor === listing.id}
+                      className="rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-1.5 text-secondary shadow-sm hover:text-primary"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpenFor(prev => prev === listing.id ? null : listing.id) }}
+                      title="More actions"
+                    >
+                      <EllipsisVerticalIcon className="h-5 w-5" />
+                    </button>
+                    {menuOpenFor === listing.id && (
+                      <div
+                        role="menu"
+                        className="absolute right-0 top-[calc(100%+8px)] z-20 w-44 overflow-hidden rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] shadow-[var(--shadow-soft)]"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
+                      >
+                        <Link
+                          role="menuitem"
+                          href={`/agent/edit/${encodeURIComponent(listing.id)}`}
+                          className="block px-4 py-2 text-sm text-secondary hover:bg-[color:var(--surface-hover)] hover:text-primary"
+                          onClick={() => setMenuOpenFor(null)}
+                        >
+                          Edit Listing
+                        </Link>
+                            {null}
+                            <button
+                              role="menuitem"
+                              type="button"
+                              className="block w-full px-4 py-2 text-left text-sm text-[color:var(--danger-500)] hover:bg-red-50"
+                              disabled={deletingId === listing.id}
+                              onClick={() => { openDeletePrompt(listing) }}
+                            >
+                              {deletingId === listing.id ? 'Deleting…' : 'Delete Listing'}
+                            </button>
+                          </div>
+                        )}
+                  </div>
+                </div>
+
                 <Link href={`/listings/${listing.id}`} className="flex h-full flex-col">
                   {/* Image */}
                   <div className="relative h-56 overflow-hidden">
@@ -112,19 +209,6 @@ export default function MyListingsPage() {
                         </div>
                       </div>
                     )}
-                    <div className="absolute right-4 top-4">
-                      {listing.has3D ? (
-                        <div className="inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-600)] px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                          <Square3Stack3DIcon className="h-3 w-3" />
-                          Immersive Ready
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1 rounded-full bg-gray-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                          <BuildingOffice2Icon className="h-3 w-3" />
-                          Standard Listing
-                        </div>
-                      )}
-                    </div>
                   </div>
 
                   {/* Content */}
@@ -150,19 +234,55 @@ export default function MyListingsPage() {
                 </Link>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 border-t border-gray-100 p-3 text-xs">
-                  <Link href={`/agent/units/${encodeURIComponent(listing.unitId)}/publish`} className="btn btn-secondary text-xs">
-                    Manage listing
+                <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 p-3 text-xs">
+                  <Link href={`/agent/edit/${encodeURIComponent(listing.id)}`} className="btn btn-secondary text-xs">
+                    Edit
                   </Link>
-                  {listing.isPublished && (
-                    <Link href={`/listings/${listing.id}`} className="btn btn-primary text-xs" target="_blank">Open public page</Link>
-                  )}
+                  {null}
+                  <button
+                    type="button"
+                    onClick={() => openDeletePrompt(listing)}
+                    disabled={deletingId === listing.id}
+                    className={`btn text-xs ${deletingId === listing.id ? 'btn-danger opacity-60 cursor-not-allowed' : 'btn-danger'}`}
+                  >
+                    {deletingId === listing.id ? 'Deleting…' : 'Delete'}
+                  </button>
                 </div>
               </motion.div>
             )
           })}
         </div>
+        {confirm && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setConfirm(null)} />
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="relative z-10 w-[90%] max-w-md rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft-raised)]"
+            >
+              <h3 className="text-lg font-semibold text-primary">Delete listing?</h3>
+              <p className="mt-2 text-sm text-secondary">
+                “{confirm.title}” will be removed from your listings. This action cannot be undone.
+              </p>
+              <div className="mt-5 flex items-center justify-end gap-2">
+                <button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${deletingId === confirm.id ? 'opacity-60 cursor-not-allowed' : ''} btn-danger`}
+                  onClick={performDelete}
+                  disabled={deletingId === confirm.id}
+                >
+                  {deletingId === confirm.id ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
+
+

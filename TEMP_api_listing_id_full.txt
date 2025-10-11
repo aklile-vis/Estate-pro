@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/database'
 import { getOptionalUser, requireAgent } from '@/lib/serverAuth'
@@ -19,36 +19,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         media: true
       } 
     })
-
-    // Determine agent user id from creator or file uploader
-    let agentUserId: string | null = null
-    try {
-      const rows = await prisma.$queryRawUnsafe<any[]>("SELECT createdById FROM unit_listings WHERE id = ? LIMIT 1", params.id)
-      const createdById = rows && rows[0] ? (rows[0].createdById as string | null) : null
-      agentUserId = createdById || (unit as any)?.fileUpload?.userId || null
-    } catch {
-      agentUserId = (unit as any)?.fileUpload?.userId || null
-    }
-
-    // Fetch agent profile details
-    let agent: any = null
-    if (agentUserId) {
-      try {
-        const user = await prisma.user.findUnique({ where: { id: agentUserId }, include: { profile: true } })
-        if (user) {
-          agent = {
-            id: user.id,
-            name: user.name ?? null,
-            email: user.email,
-            phone: user.profile?.phone ?? null,
-            jobTitle: user.profile?.jobTitle ?? null,
-            agencyName: user.profile?.agencyName ?? null,
-            avatarUrl: user.profile?.avatarUrl ?? null,
-          }
-        }
-      } catch {}
-    }
-
 
     let guidedViews: Array<{ id: string; name: string; position: number[]; target: number[] }> = []
     const editorState = unit?.editorState
@@ -76,7 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       }
     }
 
-    return NextResponse.json({ listing, unit, guidedViews, agent })
+    return NextResponse.json({ listing, unit, guidedViews })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to fetch listing' }, { status: 500 })
   }

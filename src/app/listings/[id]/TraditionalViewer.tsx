@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useRef } from "react"
 import Link from 'next/link'
@@ -36,6 +36,15 @@ const AreaIcon = (props: React.SVGProps<SVGSVGElement>) => (
 export type ListingUnitPayload = {
   listing: any
   unit: any
+  agent?: {
+    id: string
+    name: string | null
+    email: string
+    phone?: string | null
+    jobTitle?: string | null
+    agencyName?: string | null
+    avatarUrl?: string | null
+  } | null
 }
 
 export type ListingReviewShape = {
@@ -86,6 +95,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
   // Use real data if available, otherwise show no data message
   const realData = listing?.listing
   const realUnit = listing?.unit
+  const agent = listing?.agent ?? null
   
   if (!realData) {
     return (
@@ -171,6 +181,28 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
   }
 
   const { title, subtitle, pricing, propertyType, address, city, subCity, specs, description, amenities, features, media, immersive } = data
+
+  // Build a human-friendly "Listed" label from createdAt
+  const listedLabel = (() => {
+    try {
+      const created = realData?.createdAt ? new Date(realData.createdAt) : null
+      if (!created || isNaN(created.getTime())) return "Unknown"
+      const now = new Date()
+      const diffMs = now.getTime() - created.getTime()
+      const mins = Math.floor(diffMs / 60000)
+      if (mins < 1) return "Just now"
+      if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`
+      const hours = Math.floor(mins / 60)
+      if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`
+      const days = Math.floor(hours / 24)
+      if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`
+      // Fallback to date for older items
+      return created.toLocaleDateString()
+    } catch {
+      return "Unknown"
+    }
+  })()
+
 
   // Build absolute URLs for stored paths
   const toAbsolute = (url: string) => (url?.startsWith('http') ? url : `/api/files/binary?path=${encodeURIComponent(url)}`)
@@ -650,20 +682,54 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
           <aside className="space-y-6">
             <div className="sticky top-20 space-y-6">
               {/* Contact/Inquiry Card */}
+              {/* Agent Card */}
               <section className="rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 shadow-lg sm:p-6">
-                <h3 className="text-lg font-semibold text-primary mb-4 sm:text-xl">Interested in this property?</h3>
-                <div className="space-y-4">
-                  <button className="btn btn-primary w-full justify-center text-base">
-                    Schedule a Viewing
-                  </button>
-                  <button className="btn btn-secondary w-full justify-center text-base">
-                    Contact Agent
-                  </button>
-                  <button className="btn btn-outline w-full justify-center text-base">
-                    Request Info
-                  </button>
+                <h3 className="text-lg font-semibold text-primary mb-4 sm:text-xl">Listed by</h3>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-[color:var(--surface-2)] overflow-hidden flex items-center justify-center">
+                    {agent?.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={agent.avatarUrl} alt={agent?.name || "Agent"} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-sm font-semibold text-secondary">{(agent?.name || "Agent").slice(0,1)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-primary truncate">{agent?.name || "Agent"}</div>
+                    <div className="text-xs text-secondary truncate">{agent?.jobTitle || agent?.agencyName || "Real Estate Agent"}</div>
+                  </div>
                 </div>
-                
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Phone</span>
+                    <span className="font-medium text-primary">{agent?.phone || "Not provided"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Email</span>
+                    <span className="font-medium text-primary truncate max-w-[60%]">{agent?.email || "Not provided"}</span>
+                  </div>
+                  {agent?.agencyName && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted">Agency</span>
+                      <span className="font-medium text-primary">{agent.agencyName}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 space-y-3">
+                  <a
+                    href={agent?.phone ? `tel:${agent.phone}` : undefined}
+                    className="btn btn-primary w-full justify-center text-base disabled:opacity-60 disabled:cursor-not-allowed"
+                    aria-disabled={!agent?.phone}
+                  >
+                    Call Agent
+                  </a>
+                  <a
+                    href={agent?.email ? `mailto:${agent.email}` : undefined}
+                    className="btn btn-secondary w-full justify-center text-base"
+                  >
+                    Email Agent
+                  </a>
+                </div>
                 <div className="mt-6 pt-6 border-t border-[color:var(--surface-border)] space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted">Property ID</span>
@@ -671,7 +737,7 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted">Listed</span>
-                    <span className="font-medium text-primary">Just now</span>
+                    <span className="font-medium text-primary">{listedLabel}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted">Status</span>

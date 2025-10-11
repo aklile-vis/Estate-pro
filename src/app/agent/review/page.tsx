@@ -222,33 +222,53 @@ export default function AgentListingReviewPage() {
         },
         // unitId is intentionally omitted if not present in the draft
       }
-
-      const response = await fetch('/api/listings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      })
+      // If editing, send PUT to update existing listing
+      let response: Response
+      let editingId: string | null = null
+      try { editingId = sessionStorage.getItem('agent:editingListingId') } catch {}
+      if (editingId) {
+        response = await fetch(`/api/listings/${encodeURIComponent(editingId)}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        response = await fetch('/api/listings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        })
+      }
 
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to publish listing')
       }
 
-      await response.json()
+      const result = await response.json()
       
       // Clear all upload data after successful publication
       sessionStorage.removeItem('agent:uploadStep1')
       sessionStorage.removeItem('agent:uploadStep2')
       sessionStorage.removeItem('agent:reviewDraft')
+      sessionStorage.removeItem('agent:editingListingId')
       
       // Set flag to indicate successful publishing
       sessionStorage.setItem('agent:published', 'true')
       
-      // Redirect to listings page
-      router.push('/listings')
+      // Redirect to the edited/created listing page when possible
+      const idToOpen = (editingId || (result && typeof result.id === 'string' ? result.id : '')) as string
+      if (idToOpen) {
+        router.push(`/listings/${encodeURIComponent(idToOpen)}`)
+      } else {
+        router.push('/listings')
+      }
     } catch (error: any) {
       console.error('Error publishing listing:', error.message)
       // Display error message to the user

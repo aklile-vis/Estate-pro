@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Environment, OrbitControls, useGLTF } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
@@ -48,6 +48,15 @@ type PriceBreakdown = {
 interface ListingUnitPayload {
   listing: any
   unit: any
+  agent?: {
+    id: string
+    name: string | null
+    email: string
+    phone?: string | null
+    jobTitle?: string | null
+    agencyName?: string | null
+    avatarUrl?: string | null
+  } | null
 }
 
 const mergeBreakdown = (
@@ -337,7 +346,7 @@ export default function PublicListingPage() {
 
   useEffect(() => {
     const load = async () => {
-      setStatus('Loading…')
+      setStatus('Loadingâ€¦')
       const r = await fetch(`/api/listings/${id}`)
       const js = await r.json()
       if (!r.ok) { setStatus(js.error || 'Listing not found'); return }
@@ -581,7 +590,7 @@ export default function PublicListingPage() {
     }
     try {
       setIsSaving(true)
-      setStatus('Saving design…')
+      setStatus('Saving designâ€¦')
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers.Authorization = `Bearer ${token}`
       const breakdown = calculateBreakdown(selected)
@@ -663,7 +672,7 @@ export default function PublicListingPage() {
   if (!data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[color:var(--surface-0)] text-primary">
-        Loading listing…
+        Loading listingâ€¦
       </div>
     )
   }
@@ -879,10 +888,10 @@ export default function PublicListingPage() {
                     <div>
                       <p className="font-semibold text-sm">Move around</p>
                       <ul className="mt-2 space-y-1">
-                        <li>• Click and drag to look around</li>
-                        <li>• Right-click and drag to slide sideways</li>
-                        <li>• Scroll to zoom in or out</li>
-                        <li>• Tap once, then drag on touch screens</li>
+                        <li>â€¢ Click and drag to look around</li>
+                        <li>â€¢ Right-click and drag to slide sideways</li>
+                        <li>â€¢ Scroll to zoom in or out</li>
+                        <li>â€¢ Tap once, then drag on touch screens</li>
                       </ul>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -913,7 +922,7 @@ export default function PublicListingPage() {
                 )}
               </>
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm text-secondary">Preparing 3D viewer…</div>
+              <div className="flex h-full w-full items-center justify-center text-sm text-secondary">Preparing 3D viewerâ€¦</div>
             )}
           </div>
           <aside className="flex h-full min-h-0 w-[360px] flex-col gap-3 overflow-y-auto border-l border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3">
@@ -924,7 +933,7 @@ export default function PublicListingPage() {
               </div>
               {selectionLoading && (
                 <div className="rounded-sm border border-[color:var(--surface-border)] bg-[color:var(--surface-0)] p-3 text-xs text-secondary">
-                  Loading saved design…
+                  Loading saved designâ€¦
                 </div>
               )}
               {MATERIAL_CATEGORIES.some((cat) => catalogDefaults[cat].length > 0) && (
@@ -934,7 +943,7 @@ export default function PublicListingPage() {
                     <div key={cat} className="flex items-center justify-between">
                       <span className="uppercase tracking-wide text-muted">{cat}</span>
                       <span className="text-secondary">
-                        {catalogDefaults[cat].length ? catalogDefaults[cat].join(', ') : '—'}
+                        {catalogDefaults[cat].length ? catalogDefaults[cat].join(', ') : 'â€”'}
                       </span>
                     </div>
                   ))}
@@ -1009,7 +1018,7 @@ export default function PublicListingPage() {
               </div>
               {isPriceStale && (
                 <div className="rounded-sm border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-[11px] text-yellow-100">
-                  Adjustments not saved yet — totals reflect approximate preview.
+                  Adjustments not saved yet â€” totals reflect approximate preview.
                 </div>
               )}
             </PanelSection>
@@ -1028,7 +1037,7 @@ export default function PublicListingPage() {
                         <div className="flex flex-col items-end text-right">
                           <span className="text-sm text-primary">{item.optionName}</span>
                           <span className="text-[11px] text-disabled">
-                            {renderPrice(item.unitPrice)} × {item.quantity}
+                            {renderPrice(item.unitPrice)} Ã— {item.quantity}
                           </span>
                         </div>
                         <span className="text-sm font-medium text-primary">{renderPrice(item.subtotal)}</span>
@@ -1069,7 +1078,7 @@ export default function PublicListingPage() {
                       setPrice(entry.priceTotal)
                       setPriceDetails({ ...entry, selections: nextSelections })
                       setIsPriceStale(true)
-                      setStatus('Preview loaded from history — save to commit changes')
+                      setStatus('Preview loaded from history â€” save to commit changes')
                     }
                     return (
                       <div key={entry.savedAt ?? index} className="rounded border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3 text-secondary">
@@ -1111,7 +1120,7 @@ export default function PublicListingPage() {
               onClick={save}
               disabled={isSaving}
             >
-              {isSaving ? 'Saving…' : isAuthenticated ? 'Save design' : 'Login to save'}
+              {isSaving ? 'Savingâ€¦' : isAuthenticated ? 'Save design' : 'Login to save'}
             </button>
           </aside>
         </div>
