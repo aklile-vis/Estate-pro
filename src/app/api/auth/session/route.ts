@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { id: decoded.id },
-    select: { id: true, email: true, name: true, role: true },
+    include: { profile: { select: { avatarUrl: true } } },
   })
 
   if (!user) {
@@ -36,5 +36,15 @@ export async function GET(request: NextRequest) {
     return response
   }
 
-  return NextResponse.json({ authenticated: true, user, token })
+  return NextResponse.json({
+    authenticated: true,
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      avatar: user.profile?.avatarUrl ?? null,
+    },
+  })
 }

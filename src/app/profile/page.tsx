@@ -3,33 +3,42 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const { user, isAuthenticated, isLoading, logout, refresh } = useAuth()
   const router = useRouter()
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [jobTitle, setJobTitle] = useState('')
   const [agencyName, setAgencyName] = useState('')
-  const [website, setWebsite] = useState('')
-  const [licenseNo, setLicenseNo] = useState('')
-  const [twitter, setTwitter] = useState('')
-  const [linkedin, setLinkedin] = useState('')
-  const [instagram, setInstagram] = useState('')
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarRemoved, setAvatarRemoved] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [notifyLeads, setNotifyLeads] = useState(true)
-  const [notifyListingStatus, setNotifyListingStatus] = useState(true)
-  const [notifyProduct, setNotifyProduct] = useState(false)
+  // Notifications removed
 
   const [currentPwd, setCurrentPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [confirmPwd, setConfirmPwd] = useState('')
+
+  const [lastSaved, setLastSaved] = useState<string | null>(null)
+  const [initialAvatar, setInitialAvatar] = useState<string | null>(null)
+  const [profileNotice, setProfileNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [passwordNotice, setPasswordNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const pathname = usePathname()
+
+  // Section navigation (left sidebar)
+  const [activeSection, setActiveSection] = useState<string>('overview')
+  const sectionIds = useMemo(() => {
+    const base = ['overview', 'details', 'security']
+    return (user?.role === 'AGENT' || user?.role === 'ADMIN')
+      ? ['overview', 'details', 'agency', 'security', 'shortcuts']
+      : base
+  }, [user?.role])
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -38,19 +47,27 @@ export default function ProfilePage() {
   }, [isAuthenticated, isLoading, router])
 
   useEffect(() => {
-    if (user) {
-      setName(user.name || '')
-      // Prefill from localStorage if available (temporary until backend wiring)
-      setPhone(localStorage.getItem('agent:phone') || '')
-      setJobTitle(localStorage.getItem('agent:jobTitle') || '')
-      setAgencyName(localStorage.getItem('agent:agencyName') || '')
-      setWebsite(localStorage.getItem('agent:website') || '')
-      setLicenseNo(localStorage.getItem('agent:licenseNo') || '')
-      setTwitter(localStorage.getItem('agent:twitter') || '')
-      setLinkedin(localStorage.getItem('agent:linkedin') || '')
-      setInstagram(localStorage.getItem('agent:instagram') || '')
-    }
+    if (!user) return
+    setName(user.name || '')
+    // Load profile from backend
+    ;(async () => {
+      try {
+        const r = await fetch('/api/profile', { cache: 'no-store' })
+        const data = await r.json().catch(() => ({} as any))
+        if (r.ok && data?.profile) {
+          setPhone(data.profile.phone || '')
+          setJobTitle(data.profile.jobTitle || '')
+          setAgencyName(data.profile.agencyName || '')
+          if (data.profile.avatarUrl) {
+            setInitialAvatar(data.profile.avatarUrl)
+          }
+          setAvatarRemoved(false)
+        }
+      } catch {}
+    })()
   }, [user])
+
+  // Removed IntersectionObserver: sidebar now switches panes, not scroll
 
   const initials = useMemo(() => {
     const src = name || user?.name || 'EP'
@@ -66,38 +83,97 @@ export default function ProfilePage() {
     const f = e.target.files?.[0]
     if (!f) return
     const reader = new FileReader()
-    reader.onload = () => setAvatarPreview(String(reader.result))
+    reader.onload = () => {
+      setAvatarRemoved(false)
+      setAvatarPreview(String(reader.result))
+    }
     reader.readAsDataURL(f)
   }
 
-  const saveProfile: React.FormEventHandler<HTMLFormElement> = (e) => {
+  // Auto-dismiss success notices after 3s
+  useEffect(() => {
+    if (profileNotice?.type === 'success') {
+      const t = setTimeout(() => setProfileNotice(null), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [profileNotice])
+  useEffect(() => {
+    if (passwordNotice?.type === 'success') {
+      const t = setTimeout(() => setPasswordNotice(null), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [passwordNotice])
+
+  // Clear notices when switching panes or navigating away
+  useEffect(() => {
+    setProfileNotice(null)
+    setPasswordNotice(null)
+  }, [activeSection, pathname])
+
+  const saveProfile: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault()
-    localStorage.setItem('agent:phone', phone)
-    localStorage.setItem('agent:jobTitle', jobTitle)
-    localStorage.setItem('agent:agencyName', agencyName)
-    localStorage.setItem('agent:website', website)
-    localStorage.setItem('agent:licenseNo', licenseNo)
-    localStorage.setItem('agent:twitter', twitter)
-    localStorage.setItem('agent:linkedin', linkedin)
-    localStorage.setItem('agent:instagram', instagram)
-    alert('Profile saved (local). Hook to API to persist server-side.')
+    try {
+      const payload: any = {
+        name,
+        phone,
+        jobTitle,
+        agencyName,
+      }
+      if (avatarPreview && avatarPreview.startsWith('data:image/')) {
+        payload.avatarDataUrl = avatarPreview
+      } else if (avatarRemoved) {
+        payload.removeAvatar = true
+      }
+      const r = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setProfileNotice({ type: 'error', text: String(data?.error || 'Failed to save profile') })
+        return
+      }
+      setInitialAvatar(data?.profile?.avatarUrl || null)
+      setAvatarRemoved(false)
+      const ts = new Date().toISOString()
+      setLastSaved(ts)
+      setProfileNotice({ type: 'success', text: 'Profile updated successfully.' })
+      // Clear avatarPreview after successful upload/remove so future saves don’t resend
+      setAvatarPreview(data?.profile?.avatarUrl ? null : avatarPreview)
+      // Refresh auth session so header/avatar reflect changes immediately
+      void refresh()
+    } catch (err) {
+      setProfileNotice({ type: 'error', text: 'Failed to save profile' })
+    }
   }
 
-  const saveNotifications: React.FormEventHandler<HTMLFormElement> = (e) => {
-    e.preventDefault()
-    alert('Notification preferences saved (local only).')
-  }
+  // Notifications removed
 
-  const changePassword: React.FormEventHandler<HTMLFormElement> = (e) => {
+  const changePassword: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault()
     if (!currentPwd || newPwd.length < 8 || newPwd !== confirmPwd) {
-      alert('Please enter your current password and a valid new password (min 8 chars, matching confirmation).')
+      setPasswordNotice({ type: 'error', text: 'Enter current password and a valid new password (min 8 chars) that matches confirmation.' })
       return
     }
-    alert('Password change flow not wired to backend yet.')
-    setCurrentPwd('')
-    setNewPwd('')
-    setConfirmPwd('')
+    try {
+      const r = await fetch('/api/profile/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: currentPwd, newPassword: newPwd }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setPasswordNotice({ type: 'error', text: String(data?.error || 'Failed to change password') })
+        return
+      }
+      setPasswordNotice({ type: 'success', text: 'Password changed successfully.' })
+      setCurrentPwd('')
+      setNewPwd('')
+      setConfirmPwd('')
+    } catch (err) {
+      setPasswordNotice({ type: 'error', text: 'Failed to change password' })
+    }
   }
 
   if (isLoading || !user) {
@@ -111,175 +187,242 @@ export default function ProfilePage() {
   const isAgent = user.role === 'AGENT' || user.role === 'ADMIN'
 
   return (
-    <div className="container max-w-4xl space-y-8">
+    <div className="container max-w-6xl space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-primary">My Profile</h1>
-        <button className="btn btn-secondary" type="button" onClick={logout}>
-          Sign out
-        </button>
       </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Left: Sidebar */}
+        <aside className="lg:col-span-3">
+          <nav className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-3 shadow-[var(--shadow-soft)]">
+            <ul className="space-y-1">
+              {sectionIds.map((id) => (
+                <li key={id}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection(id)}
+                    className={`w-full rounded-2xl px-3 py-2 text-left text-sm transition ${
+                      activeSection === id
+                        ? 'bg-[color:var(--surface-hover)] text-primary'
+                        : 'text-secondary hover:bg-[color:var(--surface-hover)] hover:text-primary'
+                    }`}
+                  >
+                    {id === 'overview' && 'Overview'}
+                    {id === 'details' && 'Profile Details'}
+                    {id === 'agency' && 'Agency'}
+                    {id === 'security' && 'Security'}
+                    {id === 'shortcuts' && 'Agent Shortcuts'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
 
-      {/* Profile header card */}
-      <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-          {(avatarPreview || user.avatar) ? (
-            <Image
-              alt={user.name ?? user.email ?? 'User avatar'}
-              className="h-20 w-20 rounded-full object-cover"
-              height={80}
-              src={avatarPreview || (user.avatar as string)}
-              width={80}
-            />
-          ) : (
-            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[color:var(--sand-500)]/20 text-xl font-semibold text-secondary">
-              {initials}
-            </span>
-          )}
-          <div className="flex-1">
-            <div className="text-lg font-semibold text-primary">{name || 'Unnamed User'}</div>
-            <div className="text-sm text-secondary">{user.email}</div>
-            <div className="mt-1 text-xs uppercase tracking-wide text-muted">{user.role}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
-            <button type="button" className="btn btn-secondary" onClick={onPickAvatar}>Change Photo</button>
-            {avatarPreview && (
-              <button type="button" className="btn btn-secondary" onClick={() => setAvatarPreview(null)}>Remove</button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Personal & Agency Info */}
-      <form onSubmit={saveProfile} className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-        <h2 className="mb-4 text-lg font-semibold text-primary">Profile Details</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Full Name</label>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Email</label>
-            <input className="input" value={user.email} readOnly />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Phone</label>
-            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +1 555 123 4567" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Job Title</label>
-            <input className="input" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Senior Agent" />
-          </div>
-        </div>
-
-        {isAgent && (
-          <>
-            <h3 className="mt-6 text-sm font-semibold text-secondary">Agency</h3>
-            <div className="mt-2 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-secondary">Agency Name</label>
-                <input className="input" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="Your agency" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-secondary">Website</label>
-                <input className="input" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://example.com" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-secondary">License No.</label>
-                <input className="input" value={licenseNo} onChange={(e) => setLicenseNo(e.target.value)} placeholder="e.g. RERA ######" />
+        {/* Center: Content (pane switching) */}
+        <section className="space-y-6 lg:col-span-6">
+          {activeSection === 'overview' && (
+            <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
+              <div className="flex items-center gap-4">
+                {(!avatarRemoved && (initialAvatar || user.avatar)) ? (
+                  <Image
+                    alt={user.name ?? user.email ?? 'User avatar'}
+                    className="h-14 w-14 rounded-full object-cover"
+                    height={56}
+                    src={(initialAvatar || (user.avatar as string))}
+                    width={56}
+                  />
+                ) : (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[color:var(--sand-500)]/20 text-base font-semibold text-secondary">
+                    {initials}
+                  </span>
+                )}
+                <div className="flex flex-col gap-1">
+                  <div className="text-lg font-semibold text-primary">{name || 'Unnamed User'}</div>
+                  <div className="text-sm text-secondary">{user.email}</div>
+                  <div className="text-xs uppercase tracking-wide text-muted">{user.role}</div>
+                </div>
               </div>
             </div>
-          </>
-        )}
+          )}
 
-        <h3 className="mt-6 text-sm font-semibold text-secondary">Social</h3>
-        <div className="mt-2 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">LinkedIn</label>
-            <input className="input" value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="https://www.linkedin.com/in/username" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Twitter/X</label>
-            <input className="input" value={twitter} onChange={(e) => setTwitter(e.target.value)} placeholder="https://twitter.com/handle" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Instagram</label>
-            <input className="input" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="https://instagram.com/handle" />
-          </div>
-        </div>
+          {(activeSection === 'details' || (activeSection === 'agency' && isAgent)) && (
+            <form id="profile-details-form" onSubmit={saveProfile} className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
+              <h2 className="mb-4 text-lg font-semibold text-primary">
+                {activeSection === 'details' ? 'Profile Details' : 'Agency'}
+              </h2>
 
-        <div className="mt-6 flex items-center justify-end gap-3">
-          <button type="submit" className="btn btn-primary">Save Changes</button>
-        </div>
-      </form>
+              {activeSection === 'details' && (
+                <>
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {(!avatarRemoved && (avatarPreview || initialAvatar || user.avatar)) ? (
+                        <Image
+                          alt={user.name ?? user.email ?? 'User avatar'}
+                          className="h-20 w-20 rounded-full object-cover"
+                          height={80}
+                          src={(avatarPreview || initialAvatar || (user.avatar as string))}
+                          width={80}
+                        />
+                      ) : (
+                        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[color:var(--sand-500)]/20 text-xl font-semibold text-secondary">
+                          {initials}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
+                        <button type="button" className="btn btn-secondary" onClick={onPickAvatar}>Change Photo</button>
+                        {(!avatarRemoved && (avatarPreview || initialAvatar || user.avatar)) && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => {
+                              setAvatarPreview(null)
+                              setAvatarRemoved(true)
+                              setProfileNotice({ type: 'success', text: 'Avatar removed. Save changes to apply.' })
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-secondary">Full Name</label>
+                      <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-secondary">Email</label>
+                      <input className="input" value={user.email} readOnly />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-secondary">Phone</label>
+                      <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +1 555 123 4567" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-secondary">Job Title</label>
+                      <input className="input" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Senior Agent" />
+                    </div>
+                  </div>
+                </>
+              )}
 
-      {/* Notification Preferences */}
-      <form onSubmit={saveNotifications} className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-        <h2 className="mb-4 text-lg font-semibold text-primary">Notifications</h2>
-        <div className="space-y-3">
-          <label className="flex items-start gap-3 rounded-2xl border border-[color:var(--surface-border)] p-3">
-            <input type="checkbox" className="mt-1" checked={notifyLeads} onChange={(e) => setNotifyLeads(e.target.checked)} />
-            <span>
-              <span className="block text-sm font-medium text-primary">New lead emails</span>
-              <span className="block text-xs text-secondary">Alerts when buyers message you or request tours</span>
-            </span>
-          </label>
-          <label className="flex items-start gap-3 rounded-2xl border border-[color:var(--surface-border)] p-3">
-            <input type="checkbox" className="mt-1" checked={notifyListingStatus} onChange={(e) => setNotifyListingStatus(e.target.checked)} />
-            <span>
-              <span className="block text-sm font-medium text-primary">Listing status updates</span>
-              <span className="block text-xs text-secondary">Processing, QA, and publishing notifications</span>
-            </span>
-          </label>
-          <label className="flex items-start gap-3 rounded-2xl border border-[color:var(--surface-border)] p-3">
-            <input type="checkbox" className="mt-1" checked={notifyProduct} onChange={(e) => setNotifyProduct(e.target.checked)} />
-            <span>
-              <span className="block text-sm font-medium text-primary">Product tips & updates</span>
-              <span className="block text-xs text-secondary">Occasional announcements and best practices</span>
-            </span>
-          </label>
-        </div>
-        <div className="mt-6 flex items-center justify-end">
-          <button type="submit" className="btn btn-primary">Save Preferences</button>
-        </div>
-      </form>
+              {activeSection === 'agency' && isAgent && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-secondary">Agency Name</label>
+                    <input className="input" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="Your agency" />
+                  </div>
+                </div>
+              )}
 
-      {/* Security */}
-      <form onSubmit={changePassword} className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-        <h2 className="mb-4 text-lg font-semibold text-primary">Security</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Current Password</label>
-            <input className="input" type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">New Password</label>
-            <input className="input" type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-secondary">Confirm Password</label>
-            <input className="input" type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
-          </div>
-        </div>
-        <div className="mt-6 flex items-center justify-end">
-          <button type="submit" className="btn btn-primary">Change Password</button>
-        </div>
-      </form>
+              {profileNotice && (
+                <div
+                  className={`mt-4 rounded-2xl border px-3 py-2 text-sm ${
+                    profileNotice.type === 'success'
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {profileNotice.text}
+                </div>
+              )}
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button type="submit" className="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+          )}
 
-      {/* Quick Agent Shortcuts */}
-      {isAgent && (
-        <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
-          <h2 className="mb-4 text-lg font-semibold text-primary">Agent Shortcuts</h2>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-            <Link href="/agent/upload" className="btn btn-secondary">Upload New Unit</Link>
-            <Link href="/agent/units" className="btn btn-secondary">My Units</Link>
-            <Link href="/agent/review" className="btn btn-secondary">Review Drafts</Link>
-            <Link href="/agent/dashboard" className="btn btn-secondary">Dashboard</Link>
-            <Link href="/agent/materials-manager" className="btn btn-secondary">Materials</Link>
-            <Link href="/agent/models" className="btn btn-secondary">Models</Link>
+          {activeSection === 'security' && (
+            <form id="security-form" onSubmit={changePassword} className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
+              <h2 className="mb-4 text-lg font-semibold text-primary">Security</h2>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-secondary">Current Password</label>
+                  <input className="input" type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-secondary">New Password</label>
+                  <input className="input" type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-secondary">Confirm Password</label>
+                  <input className="input" type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} />
+                </div>
+              </div>
+              {passwordNotice && (
+                <div
+                  className={`mt-4 rounded-2xl border px-3 py-2 text-sm ${
+                    passwordNotice.type === 'success'
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                  }`}
+                >
+                  {passwordNotice.text}
+                </div>
+              )}
+              <div className="mt-6 flex items-center justify-end">
+                <button type="submit" className="btn btn-primary">Change Password</button>
+              </div>
+            </form>
+          )}
+
+          {isAgent && activeSection === 'shortcuts' && (
+            <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft)]">
+              <h2 className="mb-4 text-lg font-semibold text-primary">Agent Shortcuts</h2>
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                <Link href="/agent/upload" className="btn btn-secondary">Upload New Unit</Link>
+                <Link href="/agent/units" className="btn btn-secondary">My Units</Link>
+                <Link href="/agent/review" className="btn btn-secondary">Review Drafts</Link>
+                <Link href="/agent/dashboard" className="btn btn-secondary">Dashboard</Link>
+                <Link href="/agent/materials-manager" className="btn btn-secondary">Materials</Link>
+                <Link href="/agent/models" className="btn btn-secondary">Models</Link>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Right: Sticky actions */}
+        <aside className="lg:col-span-3">
+          <div className="sticky top-28 space-y-4">
+            <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 shadow-[var(--shadow-soft)]">
+              <div className="mb-3 text-sm font-semibold text-primary">Quick Actions</div>
+              <div className="grid gap-2">
+                
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setActiveSection('security')
+                    setTimeout(() => {
+                      document.getElementById('security-form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+                    }, 0)
+                  }}
+                >
+                  Change Password
+                </button>
+                {isAgent ? (
+                  <Link href="/agent/dashboard" className="btn btn-secondary">Open Agent Dashboard</Link>
+                ) : (
+                  <Link href="/listings" className="btn btn-secondary">Browse Listings</Link>
+                )}
+                <button type="button" className="btn btn-primary" onClick={logout}>Sign out</button>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4 text-sm text-secondary shadow-[var(--shadow-soft)]">
+              <div className="font-semibold text-primary">Account</div>
+              <div className="mt-2">{user.email}</div>
+              <div className="mt-1 uppercase text-[11px] tracking-wide text-muted">{user.role}</div>
+              {lastSaved && (
+                <div className="mt-3 text-[11px] text-muted">Last saved: {new Date(lastSaved).toLocaleString()}</div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        </aside>
+      </div>
     </div>
   )
 }
