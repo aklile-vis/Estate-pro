@@ -3,9 +3,10 @@
 import { prisma } from '@/lib/database'
 import { getOptionalUser, requireAgent } from '@/lib/serverAuth'
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const listing = await prisma.unitListing.findUnique({ where: { id: params.id } })
+    const { id } = await params
+    const listing = await prisma.unitListing.findUnique({ where: { id } })
     if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
     const viewer = getOptionalUser(request)
     const isAgent = viewer?.role === 'AGENT' || viewer?.role === 'ADMIN'
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Determine agent user id from creator or file uploader
     let agentUserId: string | null = null
     try {
-      const rows = await prisma.$queryRawUnsafe<any[]>("SELECT createdById FROM unit_listings WHERE id = ? LIMIT 1", params.id)
+      const rows = await prisma.$queryRawUnsafe<any[]>("SELECT createdById FROM unit_listings WHERE id = ? LIMIT 1", id)
       const createdById = rows && rows[0] ? (rows[0].createdById as string | null) : null
       agentUserId = createdById || (unit as any)?.fileUpload?.userId || null
     } catch {
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = requireAgent(request)
     if (!auth.ok) return auth.response
@@ -123,7 +124,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const updated = await prisma.unitListing.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         title: body.title ?? undefined,
         description: body.description ?? undefined,
@@ -199,7 +200,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = requireAgent(request)
     if (!auth.ok) return auth.response
@@ -208,19 +209,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (typeof body.isPublished !== 'boolean') {
       return NextResponse.json({ error: 'isPublished boolean required' }, { status: 400 })
     }
-    const updated = await prisma.unitListing.update({ where: { id: params.id }, data: { isPublished: body.isPublished } })
+    const updated = await prisma.unitListing.update({ where: { id: (await params).id }, data: { isPublished: body.isPublished } })
     return NextResponse.json(updated)
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to publish/unpublish' }, { status: 500 })
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = requireAgent(request)
     if (!auth.ok) return auth.response
 
-    const listingId = params.id
+    const listingId = (await params).id
 
     // Verify the listing exists and belongs to the agent (best-effort)
     // Supports legacy rows without createdById by falling back to file owner

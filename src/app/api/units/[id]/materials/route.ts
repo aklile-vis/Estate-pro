@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/database'
 import { requireAgent } from '@/lib/serverAuth'
 
-export async function GET(_request: NextRequest, context: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = context.params
+    const { id } = await context.params
     const list = await prisma.unitMaterialWhitelist.findMany({
       where: { unitId: id },
       include: { option: true }
@@ -16,12 +16,12 @@ export async function GET(_request: NextRequest, context: { params: { id: string
   }
 }
 
-export async function POST(request: NextRequest, context: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const auth = requireAgent(request)
     if (!auth.ok) return auth.response
 
-    const { id } = context.params
+    const { id } = await context.params
     const body = await request.json()
     if (!body.optionId) return NextResponse.json({ error: 'optionId required' }, { status: 400 })
     const buyerReady = typeof body.buyerReady === 'boolean' ? body.buyerReady : undefined
@@ -45,12 +45,12 @@ export async function POST(request: NextRequest, context: { params: { id: string
   }
 }
 
-export async function DELETE(request: NextRequest, context: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const auth = requireAgent(request)
     if (!auth.ok) return auth.response
 
-    const { id } = context.params
+    const { id } = await context.params
     const { searchParams } = new URL(request.url)
     const optionId = searchParams.get('optionId')
     if (!optionId) return NextResponse.json({ error: 'optionId required' }, { status: 400 })
