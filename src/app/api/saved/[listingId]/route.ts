@@ -17,13 +17,13 @@ async function ensureTable() {
   } catch {}
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { listingId: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ listingId: string }> }) {
   const auth = requireUser(request)
   if (!auth.ok) return auth.response
   await ensureTable()
 
   try {
-    const listingId = params.listingId
+    const { listingId } = await params
     if (!listingId) return NextResponse.json({ error: 'listingId is required' }, { status: 400 })
 
     await prisma.$executeRawUnsafe(
