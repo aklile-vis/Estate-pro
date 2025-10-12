@@ -15,8 +15,8 @@ export default function WizardWarningModal({
   isOpen,
   onConfirm,
   onCancel,
-  title = "Unsaved Changes",
-  message = "You have unsaved changes that will be lost if you leave the wizard.",
+  title = "Leave publish page?",
+  message = "You have unpublished changes. If you leave now, your changes will be lost.",
   confirmText = "Leave Anyway",
   cancelText = "Stay Here"
 }: WizardWarningModalProps) {

@@ -766,10 +766,6 @@ export default function AgentUploadMediaPage() {
         isOpen={showWarningModal}
         onConfirm={handleConfirmLeave}
         onCancel={handleCancelLeave}
-        title="Leave Media Upload?"
-        message="You have unsaved media files that will be lost if you leave this step."
-        confirmText="Leave Anyway"
-        cancelText="Stay Here"
       />
     </div>
   )

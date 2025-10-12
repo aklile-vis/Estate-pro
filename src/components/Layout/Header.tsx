@@ -93,12 +93,28 @@ export default function Header() {
               const priceInput = document.querySelector('input[name="basePrice"]') as HTMLInputElement
               const descriptionTextarea = document.querySelector('textarea[name="description"]') as HTMLTextAreaElement
               const addressInput = document.querySelector('input[name="address"]') as HTMLInputElement
-              
+              const cityInput = document.querySelector('input[name="city"]') as HTMLInputElement
+              const subCityInput = document.querySelector('input[name="subCity"]') as HTMLInputElement
+              const areaInput = document.querySelector('input[name="areaSqm"]') as HTMLInputElement
+              const bedroomsInput = document.querySelector('input[name="bedrooms"]') as HTMLInputElement
+              const bathroomsInput = document.querySelector('input[name="bathrooms"]') as HTMLInputElement
+              const propertyTypeInput = document.querySelector('input[name="propertyType"]') as HTMLInputElement
+              const checkedAmenities = document.querySelectorAll('input[name="amenities"]:checked')
+              const checkedFeatures = document.querySelectorAll('input[name="features"]:checked')
+
               hasMeaningfulData = !!(
                 (titleInput && titleInput.value.trim()) ||
                 (priceInput && priceInput.value.trim()) ||
                 (descriptionTextarea && descriptionTextarea.value.trim()) ||
-                (addressInput && addressInput.value.trim())
+                (addressInput && addressInput.value.trim()) ||
+                (cityInput && cityInput.value.trim()) ||
+                (subCityInput && subCityInput.value.trim()) ||
+                (areaInput && areaInput.value.trim()) ||
+                (bedroomsInput && bedroomsInput.value.trim()) ||
+                (bathroomsInput && bathroomsInput.value.trim()) ||
+                (propertyTypeInput && propertyTypeInput.value.trim()) ||
+                checkedAmenities.length > 0 ||
+                checkedFeatures.length > 0
               )
             } catch (e) {
               // Ignore DOM query errors
@@ -453,10 +469,6 @@ export default function Header() {
         isOpen={showWarningModal}
         onConfirm={handleConfirmLeave}
         onCancel={handleCancelLeave}
-        title="Leave Upload Wizard?"
-        message="You have unsaved changes in the upload wizard that will be lost if you leave."
-        confirmText="Leave Anyway"
-        cancelText="Stay Here"
       />
     </header>
   )

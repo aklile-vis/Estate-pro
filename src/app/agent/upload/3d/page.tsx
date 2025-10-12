@@ -814,10 +814,6 @@ export default function AgentUpload3DPage() {
         isOpen={showWarningModal}
         onConfirm={handleConfirmLeave}
         onCancel={handleCancelLeave}
-        title="Leave 3D Pipeline?"
-        message="You have unsaved 3D processing data that will be lost if you leave this step."
-        confirmText="Leave Anyway"
-        cancelText="Stay Here"
       />
     </div>
   )

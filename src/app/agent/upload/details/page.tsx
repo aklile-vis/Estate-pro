@@ -124,17 +124,18 @@ export default function AgentUploadDetailsPage() {
 
   // Check if there's unsaved data (meaningful data, not just default values)
   const hasUnsavedData = Boolean(
-    form.title || 
-    form.basePrice || 
-    form.description || 
-    form.address || 
-    form.city || 
+    form.title ||
+    form.basePrice ||
+    form.description ||
+    form.address ||
+    form.city ||
     form.subCity ||
-    (form.bedrooms && form.bedrooms !== '0') ||
-    (form.bathrooms && form.bathrooms !== '1') ||
+    form.bedrooms ||
+    form.bathrooms ||
     form.areaSqm ||
     form.amenities.length > 0 ||
-    form.features.length > 0
+    form.features.length > 0 ||
+    propertyType
   )
 
   // Data protection
@@ -466,6 +467,7 @@ export default function AgentUploadDetailsPage() {
               <div className="relative">
                 <input
                   required
+                  name="title"
                   value={form.title}
                   onChange={handleChange('title')}
                   onBlur={() => handleBlur('title')}
@@ -485,6 +487,7 @@ export default function AgentUploadDetailsPage() {
                   <input
                     required
                     type="number"
+                    name="basePrice"
                     min="0"
                     step="0.01"
                     value={form.basePrice}
@@ -516,6 +519,7 @@ export default function AgentUploadDetailsPage() {
             <div className="relative">
               <textarea
                 rows={3}
+                name="description"
                 value={form.description}
                 onChange={handleChange('description')}
                 onBlur={() => handleBlur('description')}
@@ -538,6 +542,7 @@ export default function AgentUploadDetailsPage() {
               <div className="relative">
                 <input
                   value={form.address}
+                  name="address"
                   onChange={handleChange('address')}
                   onBlur={() => handleBlur('address')}
                   className="input h-11 w-full"
@@ -553,6 +558,7 @@ export default function AgentUploadDetailsPage() {
               <div className="relative">
                 <input
                   value={form.city}
+                  name="city"
                   onChange={handleChange('city')}
                   onBlur={() => handleBlur('city')}
                   className="input h-11 w-full"
@@ -568,6 +574,7 @@ export default function AgentUploadDetailsPage() {
               <div className="relative">
                 <input
                   required
+                  name="subCity"
                   value={form.subCity}
                   onChange={handleChange('subCity')}
                   onBlur={() => handleBlur('subCity')}
@@ -933,6 +940,7 @@ export default function AgentUploadDetailsPage() {
                   type="number"
                   min="1"
                   step="0.1"
+                  name="areaSqm"
                   value={form.areaSqm}
                   onChange={handleChange('areaSqm')}
                   onBlur={() => handleBlur('areaSqm')}
@@ -965,6 +973,8 @@ export default function AgentUploadDetailsPage() {
                     <div className="relative">
                       <input
                         type="checkbox"
+                        name="amenities"
+                        value={a}
                         className="sr-only"
                         checked={checked}
                         onChange={() => toggleInArray('amenities', a)}
@@ -1002,6 +1012,8 @@ export default function AgentUploadDetailsPage() {
                     <div className="relative">
                       <input
                         type="checkbox"
+                        name="features"
+                        value={f}
                         className="sr-only"
                         checked={checked}
                         onChange={() => toggleInArray('features', f)}
@@ -1025,6 +1037,11 @@ export default function AgentUploadDetailsPage() {
             </div>
           </div>
         </section>
+
+        {/* Hidden inputs for header detection of unsaved data */}
+        <input type="hidden" name="bedrooms" value={form.bedrooms || ''} readOnly aria-hidden="true" />
+        <input type="hidden" name="bathrooms" value={form.bathrooms || ''} readOnly aria-hidden="true" />
+        <input type="hidden" name="propertyType" value={propertyType || ''} readOnly aria-hidden="true" />
 
         {/* Step 1 Navigation */}
         <div className="flex justify-between">
@@ -1057,10 +1074,6 @@ export default function AgentUploadDetailsPage() {
         isOpen={showWarningModal}
         onConfirm={handleConfirmLeave}
         onCancel={handleCancelLeave}
-        title="Leave Property Details?"
-        message="You have unsaved property details that will be lost if you leave this step."
-        confirmText="Leave Anyway"
-        cancelText="Stay Here"
       />
     </div>
   )
