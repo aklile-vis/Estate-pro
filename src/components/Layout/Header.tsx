@@ -15,6 +15,8 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { usePathname } from 'next/navigation'
+import WizardWarningModal from '@/components/WizardWarningModal'
 
 const navigation = [
   { label: 'Listings', href: '/listings' },
@@ -25,10 +27,166 @@ const navigation = [
 
 export default function Header() {
   const { user, logout } = useAuth()
+  const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const [showWarningModal, setShowWarningModal] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null)
   const profileMenuRefDesktop = useRef<HTMLDivElement>(null)
   const profileMenuRefMobile = useRef<HTMLDivElement>(null)
+
+  // Check if we're in a wizard page
+  const isInWizard = pathname.startsWith('/agent/upload/') || pathname === '/agent/review'
+  
+  // Don't show modal when navigating within wizard (review -> edit)
+  const isNavigatingWithinWizard = useMemo(() => {
+    // If we're not in wizard, no protection needed
+    if (!isInWizard) return false
+    
+    // Check if there's a pending navigation that's within wizard
+    return false // This will be handled by the hook's logic
+  }, [isInWizard])
+  
+  // Check if there's unsaved wizard data
+  const [hasUnsavedWizardData, setHasUnsavedWizardData] = useState(false)
+  
+  useEffect(() => {
+    if (!isInWizard) {
+      setHasUnsavedWizardData(false)
+      return
+    }
+    
+    const checkForUnsavedData = () => {
+      try {
+        // Check each step for data
+        const step1 = sessionStorage.getItem('agent:uploadStep1')
+        const step2 = sessionStorage.getItem('agent:uploadStep2') 
+        const step3 = sessionStorage.getItem('agent:uploadStep3')
+        const review = sessionStorage.getItem('agent:reviewDraft')
+        const editorChanges = sessionStorage.getItem('agent:editorChanges')
+        
+        // If we're on details page, check both sessionStorage AND current form state
+        if (pathname === '/agent/upload/details') {
+          let hasMeaningfulData = false
+          
+          // First check sessionStorage data
+          if (step1) {
+            try {
+              const step1Data = JSON.parse(step1)
+              // Check if there's actual property data
+              hasMeaningfulData = hasMeaningfulData || !!(
+                step1Data.form?.title || 
+                step1Data.form?.description || 
+                step1Data.form?.address || 
+                step1Data.form?.basePrice
+              )
+            } catch (e) {
+              // Ignore parsing errors
+            }
+          }
+          
+          // Also check if there's current form data in the DOM (not yet saved to sessionStorage)
+          if (!hasMeaningfulData) {
+            try {
+              // Check if any form fields have values
+              const titleInput = document.querySelector('input[name="title"]') as HTMLInputElement
+              const priceInput = document.querySelector('input[name="basePrice"]') as HTMLInputElement
+              const descriptionTextarea = document.querySelector('textarea[name="description"]') as HTMLTextAreaElement
+              const addressInput = document.querySelector('input[name="address"]') as HTMLInputElement
+              
+              hasMeaningfulData = !!(
+                (titleInput && titleInput.value.trim()) ||
+                (priceInput && priceInput.value.trim()) ||
+                (descriptionTextarea && descriptionTextarea.value.trim()) ||
+                (addressInput && addressInput.value.trim())
+              )
+            } catch (e) {
+              // Ignore DOM query errors
+            }
+          }
+          
+          // Clear any old data from other steps when on details page
+          if (!hasMeaningfulData) {
+            sessionStorage.removeItem('agent:uploadStep2')
+            sessionStorage.removeItem('agent:uploadStep3')
+            sessionStorage.removeItem('agent:reviewDraft')
+            sessionStorage.removeItem('agent:editorChanges')
+          }
+          setHasUnsavedWizardData(hasMeaningfulData)
+        } else {
+          // For media, 3D, or review pages, any data means we should protect
+          const hasAnyData = !!(step1 || step2 || step3 || review || editorChanges)
+          setHasUnsavedWizardData(hasAnyData)
+        }
+      } catch {
+        setHasUnsavedWizardData(false)
+      }
+    }
+    
+    // Check initially
+    checkForUnsavedData()
+    
+    // Listen for storage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key?.startsWith('agent:upload') || e.key === 'agent:reviewDraft' || e.key === 'agent:editorChanges') {
+        checkForUnsavedData()
+      }
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    
+    // Also check periodically in case of same-tab changes
+    const interval = setInterval(checkForUnsavedData, 1000)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(interval)
+    }
+  }, [isInWizard, pathname])
+
+  // Navigation function that shows themed modal for wizard data protection
+  const handleNavClick = (href: string) => {
+    if (hasUnsavedWizardData) {
+      // Show themed modal before leaving wizard
+      setPendingNavigation(href)
+      setShowWarningModal(true)
+    } else {
+      window.location.href = href
+    }
+  }
+
+  const handleConfirmLeave = () => {
+    setShowWarningModal(false)
+    if (pendingNavigation) {
+      // Clear wizard data and navigate
+      sessionStorage.removeItem('agent:uploadStep1')
+      sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:uploadStep3')
+      sessionStorage.removeItem('agent:reviewDraft')
+      sessionStorage.removeItem('agent:editorChanges')
+      window.location.href = pendingNavigation
+      setPendingNavigation(null)
+    }
+  }
+
+  const handleCancelLeave = () => {
+    setShowWarningModal(false)
+    setPendingNavigation(null)
+  }
+
+  // Keyboard support for warning modal
+  useEffect(() => {
+    if (!showWarningModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCancelLeave()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showWarningModal])
+
+  // Note: beforeunload alerts removed per user request - no alerts for any reason
 
   const initials = useMemo(() => {
     if (!user?.name) return 'EP'
@@ -83,13 +241,13 @@ export default function Header() {
 
           <nav className="hidden items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-2 py-1 shadow-sm md:flex">
             {visibleNavigation.map((item) => (
-              <Link
+              <button
                 key={item.href}
-                href={item.href}
+                onClick={() => handleNavClick(item.href)}
                 className="rounded-full border border-transparent px-4 py-2 text-sm font-medium text-secondary transition hover:border-[color:var(--surface-border-strong)] hover:bg-[color:var(--surface-hover)] hover:text-primary"
               >
                 {item.label}
-              </Link>
+              </button>
             ))}
           </nav>
 
@@ -256,14 +414,16 @@ export default function Header() {
                 </div>
                 <nav className="flex flex-col gap-2">
                   {visibleNavigation.map((item) => (
-                    <Link
+                    <button
                       key={item.href}
                       className="rounded-2xl border border-transparent px-4 py-3 text-sm font-semibold text-secondary transition hover:border-[color:var(--surface-border-strong)] hover:bg-[color:var(--surface-hover)] hover:text-primary"
-                      href={item.href}
-                      onClick={() => setIsMenuOpen(false)}
+                      onClick={() => {
+                        setIsMenuOpen(false)
+                        handleNavClick(item.href)
+                      }}
                     >
                       {item.label}
-                    </Link>
+                    </button>
                   ))}
                 </nav>
                 {user ? (
@@ -287,6 +447,17 @@ export default function Header() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Warning Modal */}
+      <WizardWarningModal
+        isOpen={showWarningModal}
+        onConfirm={handleConfirmLeave}
+        onCancel={handleCancelLeave}
+        title="Leave Upload Wizard?"
+        message="You have unsaved changes in the upload wizard that will be lost if you leave."
+        confirmText="Leave Anyway"
+        cancelText="Stay Here"
+      />
     </header>
   )
 }

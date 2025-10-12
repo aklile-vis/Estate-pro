@@ -49,8 +49,8 @@ export default function MaterialsManager() {
 
   const duplicateCurrent = async () => {
     if (!currentLib) return
-    const name = prompt('New library name?')
-    if (!name) return
+    // TODO: Replace with proper input modal
+    const name = 'Copy of ' + currentLib.name
     setStatus('Duplicating library…')
     // Create new library
     const make = await fetch('/api/materials/libraries', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name }) })
@@ -106,8 +106,8 @@ export default function MaterialsManager() {
             <button
               className="btn btn-primary"
               onClick={() => {
-                const n = prompt('New library name?')
-                if (n) createLib(n)
+                // TODO: Replace with proper input modal
+                createLib('New Library')
               }}
               type="button"
             >

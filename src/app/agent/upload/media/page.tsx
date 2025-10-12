@@ -5,6 +5,8 @@ import { useCallback, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { useWizardDataProtection } from '@/hooks/useWizardDataProtection'
+import WizardWarningModal from '@/components/WizardWarningModal'
 
 // Images
 type ImageItem = { file?: File | null; url: string; isCover?: boolean }
@@ -31,6 +33,34 @@ export default function AgentUploadMediaPage() {
 
   const { token } = useAuth()
   const router = useRouter()
+
+  // Check if there's unsaved data
+  const hasUnsavedData = Boolean(
+    images.length > 0 || 
+    videos.length > 0 || 
+    floorPlans.length > 0
+  )
+
+  // Data protection
+  const { 
+    showWarningModal, 
+    protectedRouterPush, 
+    handleConfirmLeave, 
+    handleCancelLeave 
+  } = useWizardDataProtection({
+    hasUnsavedData,
+    onConfirmLeave: () => {
+      // Clear all wizard data when leaving
+      sessionStorage.removeItem('agent:uploadStep1')
+      sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:uploadStep3')
+      sessionStorage.removeItem('agent:reviewDraft')
+      sessionStorage.removeItem('agent:editorChanges')
+    },
+    onCancelLeave: () => {
+      // Stay on the page
+    }
+  })
 
   const addImages = async (files: FileList | File[]) => {
     const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'))
@@ -244,7 +274,7 @@ export default function AgentUploadMediaPage() {
 
   // Go back to details step
   const goBackToDetails = useCallback(() => {
-    router.back()
+    router.push('/agent/upload/details')
   }, [router])
 
   // Load media data from session storage
@@ -256,7 +286,9 @@ export default function AgentUploadMediaPage() {
         // Clear all data and start fresh
         sessionStorage.removeItem('agent:uploadStep1')
         sessionStorage.removeItem('agent:uploadStep2')
+        sessionStorage.removeItem('agent:uploadStep3')
         sessionStorage.removeItem('agent:reviewDraft')
+        sessionStorage.removeItem('agent:editorChanges')
         sessionStorage.removeItem('agent:published')
         return
       }
@@ -728,6 +760,17 @@ export default function AgentUploadMediaPage() {
           </div>
         )
       })()}
+
+      {/* Warning Modal */}
+      <WizardWarningModal
+        isOpen={showWarningModal}
+        onConfirm={handleConfirmLeave}
+        onCancel={handleCancelLeave}
+        title="Leave Media Upload?"
+        message="You have unsaved media files that will be lost if you leave this step."
+        confirmText="Leave Anyway"
+        cancelText="Stay Here"
+      />
     </div>
   )
 }

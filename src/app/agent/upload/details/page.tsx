@@ -8,6 +8,8 @@ import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { SUPPORTED_CURRENCIES } from '@/lib/utils'
+import { useWizardDataProtection } from '@/hooks/useWizardDataProtection'
+import WizardWarningModal from '@/components/WizardWarningModal'
 
 // ================================
 // Types & Constants
@@ -119,6 +121,42 @@ export default function AgentUploadDetailsPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const router = useRouter()
+
+  // Check if there's unsaved data (meaningful data, not just default values)
+  const hasUnsavedData = Boolean(
+    form.title || 
+    form.basePrice || 
+    form.description || 
+    form.address || 
+    form.city || 
+    form.subCity ||
+    (form.bedrooms && form.bedrooms !== '0') ||
+    (form.bathrooms && form.bathrooms !== '1') ||
+    form.areaSqm ||
+    form.amenities.length > 0 ||
+    form.features.length > 0
+  )
+
+  // Data protection
+  const { 
+    showWarningModal, 
+    protectedRouterPush, 
+    handleConfirmLeave, 
+    handleCancelLeave 
+  } = useWizardDataProtection({
+    hasUnsavedData,
+    onConfirmLeave: () => {
+      // Clear all wizard data when leaving
+      sessionStorage.removeItem('agent:uploadStep1')
+      sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:uploadStep3')
+      sessionStorage.removeItem('agent:reviewDraft')
+      sessionStorage.removeItem('agent:editorChanges')
+    },
+    onCancelLeave: () => {
+      // Stay on the page
+    }
+  })
 
   // ----------------
   // Handlers
@@ -261,7 +299,9 @@ export default function AgentUploadDetailsPage() {
     try {
       sessionStorage.removeItem('agent:uploadStep1')
       sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:uploadStep3')
       sessionStorage.removeItem('agent:reviewDraft')
+      sessionStorage.removeItem('agent:editorChanges')
     } catch {
       /* ignore storage errors */
     }
@@ -275,7 +315,9 @@ export default function AgentUploadDetailsPage() {
         // Clear all data and start fresh
         sessionStorage.removeItem('agent:uploadStep1')
         sessionStorage.removeItem('agent:uploadStep2')
+        sessionStorage.removeItem('agent:uploadStep3')
         sessionStorage.removeItem('agent:reviewDraft')
+        sessionStorage.removeItem('agent:editorChanges')
         sessionStorage.removeItem('agent:published')
         return
       }
@@ -1009,6 +1051,17 @@ export default function AgentUploadDetailsPage() {
           </button>
         </div>
       </div>
+
+      {/* Warning Modal */}
+      <WizardWarningModal
+        isOpen={showWarningModal}
+        onConfirm={handleConfirmLeave}
+        onCancel={handleCancelLeave}
+        title="Leave Property Details?"
+        message="You have unsaved property details that will be lost if you leave this step."
+        confirmText="Leave Anyway"
+        cancelText="Stay Here"
+      />
     </div>
   )
 }

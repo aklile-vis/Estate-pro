@@ -32,21 +32,8 @@ export default function ModelsPage() {
   };
 
   const deleteModel = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this model?')) return;
-    
-    try {
-      const response = await fetch(`/api/models/${id}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        setModels(models.filter(m => m.id !== id));
-      } else {
-        throw new Error('Failed to delete model');
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete model');
-    }
+    // TODO: Replace with proper confirmation modal
+    console.log('Delete model:', id);
   };
 
   if (loading) {

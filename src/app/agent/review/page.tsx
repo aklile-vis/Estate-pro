@@ -9,6 +9,7 @@ import {
   CheckBadgeIcon,
   ClipboardDocumentListIcon,
   CubeTransparentIcon,
+  ExclamationTriangleIcon,
   MapPinIcon,
   PhotoIcon,
   PlayCircleIcon,
@@ -63,8 +64,17 @@ export default function AgentListingReviewPage() {
         immersive: {
           has3D: Boolean(parsed?.immersive?.has3D),
           glbPath: parsed?.immersive?.glbPath || undefined,
-          viewerLink: parsed?.immersive?.viewerLink || undefined,
+          ifcPath: parsed?.immersive?.ifcPath || undefined,
+          usdPath: parsed?.immersive?.usdPath || undefined,
+          filePath: parsed?.immersive?.filePath || undefined,
+          fileName: parsed?.immersive?.fileName || undefined,
+          elementsCount: parsed?.immersive?.elementsCount || 0,
+          aiEnrichment: parsed?.immersive?.aiEnrichment || null,
+          topologyPath: parsed?.immersive?.topologyPath || undefined,
           processedAt: parsed?.immersive?.processedAt || undefined,
+          editorChanges: parsed?.immersive?.editorChanges || null,
+          unitId: parsed?.immersive?.unitId || undefined,
+          viewerLink: parsed?.immersive?.viewerLink || undefined,
         },
       }
       setDraft(normalized)
@@ -147,6 +157,7 @@ export default function AgentListingReviewPage() {
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
   }, [viewer, closeViewer, nextViewer, prevViewer])
 
+
   // Set hero index to cover image when media is available - defined before early return
   useEffect(() => {
     if (draft?.media?.coverImage && draft?.media?.images?.length > 0) {
@@ -161,6 +172,25 @@ export default function AgentListingReviewPage() {
   const router = useRouter()
   const { token } = useAuth()
   const [isPublishing, setIsPublishing] = useState(false)
+  const [showErrorModal, setShowErrorModal] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  // Keyboard support for error modal
+  useEffect(() => {
+    if (!showErrorModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowErrorModal(false)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { 
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow 
+    }
+  }, [showErrorModal])
 
   if (!draft) {
     return (
@@ -219,9 +249,21 @@ export default function AgentListingReviewPage() {
         isPublished: true, // Mark as published when submitted from here
         immersive: {
           has3D: immersive.has3D,
+          glbPath: immersive.glbPath,
+          ifcPath: immersive.ifcPath,
+          usdPath: immersive.usdPath,
+          filePath: immersive.filePath,
+          fileName: immersive.fileName,
+          elementsCount: immersive.elementsCount,
+          aiEnrichment: immersive.aiEnrichment,
+          topologyPath: immersive.topologyPath,
+          processedAt: immersive.processedAt,
+          editorChanges: immersive.editorChanges,
+          unitId: immersive.unitId,
         },
         // unitId is intentionally omitted if not present in the draft
       }
+      
       // If editing, send PUT to update existing listing
       let response: Response
       let editingId: string | null = null
@@ -256,8 +298,10 @@ export default function AgentListingReviewPage() {
       // Clear all upload data after successful publication
       sessionStorage.removeItem('agent:uploadStep1')
       sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:uploadStep3')
       sessionStorage.removeItem('agent:reviewDraft')
       sessionStorage.removeItem('agent:editingListingId')
+      sessionStorage.removeItem('agent:editorChanges')
       
       // Set flag to indicate successful publishing
       sessionStorage.setItem('agent:published', 'true')
@@ -271,8 +315,9 @@ export default function AgentListingReviewPage() {
       }
     } catch (error: any) {
       console.error('Error publishing listing:', error.message)
-      // Display error message to the user
-      alert(`Error publishing listing: ${error.message}`)
+      // Display error message in modal
+      setErrorMessage(`Error publishing listing: ${error.message}`)
+      setShowErrorModal(true)
     } finally {
       setIsPublishing(false)
     }
@@ -724,6 +769,106 @@ export default function AgentListingReviewPage() {
                 </div>
               </section>
             )}
+
+            {/* 3D Virtual Tour Preview */}
+            {immersive.has3D && (
+              <section className="space-y-4">
+                <h2 className="text-2xl font-semibold text-primary">3D Virtual Tour</h2>
+                <div className="space-y-4">
+                  {/* 3D Model Preview */}
+                  <div className="aspect-video bg-gray-100 rounded-xl border border-[color:var(--surface-border)] overflow-hidden">
+                    {immersive.glbPath ? (
+                      <iframe 
+                        src={`/agent/3d-viewer?model=${encodeURIComponent(immersive.glbPath)}&embedded=true&controls=true`}
+                        className="w-full h-full"
+                        title="3D Virtual Tour Preview"
+                        allow="fullscreen"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                        <div className="text-center">
+                          <CubeTransparentIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-600">3D Model Loading...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 3D Details */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-3 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+                      <h3 className="font-medium text-primary">Model Information</h3>
+                      <dl className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <dt className="text-muted">File Name</dt>
+                          <dd className="font-medium text-primary">{immersive.fileName || '3D Model'}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-muted">Elements</dt>
+                          <dd className="font-medium text-primary">{immersive.elementsCount}</dd>
+                        </div>
+                        <div className="flex justify-between">
+                          <dt className="text-muted">Processed</dt>
+                          <dd className="font-medium text-primary">
+                            {immersive.processedAt ? new Date(immersive.processedAt).toLocaleDateString() : 'Recently'}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                    
+                    {/* Editor Changes Summary */}
+                    {immersive.editorChanges && (
+                      <div className="space-y-3 rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+                        <h3 className="font-medium text-primary">Customizations</h3>
+                        <div className="space-y-2 text-sm">
+                          {immersive.editorChanges.materialAssignments && Object.keys(immersive.editorChanges.materialAssignments).length > 0 && (
+                            <div className="flex justify-between">
+                              <dt className="text-muted">Materials Updated</dt>
+                              <dd className="font-medium text-primary">{Object.keys(immersive.editorChanges.materialAssignments).length}</dd>
+                            </div>
+                          )}
+                          {immersive.editorChanges.navigation?.guidedViews && immersive.editorChanges.navigation.guidedViews.length > 0 && (
+                            <div className="flex justify-between">
+                              <dt className="text-muted">Saved Views</dt>
+                              <dd className="font-medium text-primary">{immersive.editorChanges.navigation.guidedViews.length}</dd>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <dt className="text-muted">Last Updated</dt>
+                            <dd className="font-medium text-primary">
+                              {immersive.editorChanges.updatedAt ? new Date(immersive.editorChanges.updatedAt).toLocaleDateString() : 'Recently'}
+                            </dd>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 3D Features */}
+                  <div className="rounded-xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-4">
+                    <h3 className="font-medium text-primary mb-3">3D Features</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-secondary">Interactive Navigation</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-secondary">Material Customization</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-secondary">AI-Enhanced</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-secondary">Mobile Compatible</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
           </div>
 
           {/* Right Column - Contact Card (Sticky) */}
@@ -910,6 +1055,52 @@ export default function AgentListingReviewPage() {
           </div>
         )
       })()}
+
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="relative w-full max-w-md rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-xl">
+            {/* Close button */}
+            <button
+              onClick={() => setShowErrorModal(false)}
+              className="absolute right-4 top-4 rounded-full p-2 text-muted hover:bg-[color:var(--surface-2)] hover:text-primary transition-colors"
+              aria-label="Close modal"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+            
+            {/* Error icon */}
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+            </div>
+            
+            {/* Error content */}
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-primary mb-2">Publishing Failed</h3>
+              <p className="text-sm text-secondary mb-6">{errorMessage}</p>
+              
+              {/* Action buttons */}
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowErrorModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={() => {
+                    setShowErrorModal(false)
+                    router.push('/agent/upload/details')
+                  }}
+                  className="btn btn-primary"
+                >
+                  Start Over
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

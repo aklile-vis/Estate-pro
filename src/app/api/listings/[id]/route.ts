@@ -19,6 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         media: true
       } 
     })
+    
 
     // Determine agent user id from creator or file uploader
     let agentUserId: string | null = null
@@ -76,7 +77,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       }
     }
 
-    return NextResponse.json({ listing, unit, guidedViews, agent })
+    // Transform the response to match frontend expectations
+    const response = {
+      listing,
+      unit: unit ? {
+        ...unit,
+        file: unit.fileUpload // Map fileUpload to file for frontend compatibility
+      } : null,
+      guidedViews,
+      agent
+    }
+    
+    return NextResponse.json(response)
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to fetch listing' }, { status: 500 })
   }

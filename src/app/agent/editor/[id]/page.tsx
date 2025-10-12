@@ -3,7 +3,7 @@
 import { OrbitControls, Environment, GizmoHelper, GizmoViewport, Html, Line, useCursor, useGLTF } from '@react-three/drei'
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -424,6 +424,9 @@ function Model({
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const returnTo = searchParams.get('returnTo')
   const [unit, setUnit] = useState<UnitResp | null>(null)
   const [whitelist, setWhitelist] = useState<Whitelist[]>([])
   const [status, setStatus] = useState('')
@@ -814,6 +817,49 @@ export default function EditorPage() {
   const canPublish = Boolean(unit?.id && unit?.file?.glbPath)
   const publishLabel = listingInfo?.isPublished ? 'Update listing' : 'Publish listing'
   const publishHref = unit?.id ? `/agent/units/${encodeURIComponent(unit.id)}/publish` : '#'
+
+  // Handle return to wizard
+  const handleReturnToWizard = useCallback(async () => {
+    if (!id || !returnTo) return
+    
+    // Save current editor state
+    const currentState = {
+      materialAssignments,
+      navigation: {
+        floorLock: floorLockEnabled,
+        guidedViews: guidedViews,
+      },
+      aiEnhancement: {
+        enabled: aiEnhancementState.enabled,
+        status: aiEnhancementState.status,
+        message: aiEnhancementState.message,
+      }
+    }
+    
+    try {
+      await fetch(`/api/units/${id}/editor-state`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentState),
+      })
+      
+      // Store editor changes in sessionStorage for wizard
+      const editorChanges = {
+        unitId: id,
+        materialAssignments,
+        navigation: currentState.navigation,
+        aiEnhancement: currentState.aiEnhancement,
+        updatedAt: new Date().toISOString(),
+      }
+      
+      sessionStorage.setItem('agent:editorChanges', JSON.stringify(editorChanges))
+      
+      // Return to wizard
+      router.push('/agent/upload/3d')
+    } catch (error) {
+      setStatus('Failed to save changes. Please try again.')
+    }
+  }, [id, returnTo, materialAssignments, floorLockEnabled, guidedViews, aiEnhancementState, router])
 
   const recalcPrice = useCallback((current: Partial<Record<MaterialCategory, string>>) => {
     let total = 0
@@ -1874,10 +1920,8 @@ export default function EditorPage() {
     (id: string) => {
       const targetView = guidedViews.find((view) => view.id === id)
       if (!targetView) return
-      const input = window.prompt('Name this view', targetView.name)
-      if (input === null) return
-      const trimmed = input.trim()
-      if (!trimmed || trimmed === targetView.name) return
+      // TODO: Replace with proper input modal
+      const trimmed = targetView.name + ' (Renamed)'
       const updated = guidedViews.map((view) => (view.id === id ? { ...view, name: trimmed } : view))
       setGuidedViews(updated)
       persistGuidedViews(updated, 'Guided views updated')
@@ -2573,14 +2617,23 @@ export default function EditorPage() {
               <div className="text-xs uppercase tracking-[0.25em] text-disabled">Details</div>
               <div className="flex flex-wrap items-center gap-2">
                 {unit?.id && (
-                  <Link
-                    href={publishHref}
-                    className={`btn btn-primary text-xs ${!canPublish ? 'pointer-events-none opacity-40' : ''}`}
-                    aria-disabled={!canPublish}
-                    prefetch={false}
-                  >
-                    {publishLabel}
-                  </Link>
+                  returnTo === 'wizard' ? (
+                    <button
+                      onClick={handleReturnToWizard}
+                      className="btn btn-primary text-xs"
+                    >
+                      Return to Wizard
+                    </button>
+                  ) : (
+                    <Link
+                      href={publishHref}
+                      className={`btn btn-primary text-xs ${!canPublish ? 'pointer-events-none opacity-40' : ''}`}
+                      aria-disabled={!canPublish}
+                      prefetch={false}
+                    >
+                      {publishLabel}
+                    </Link>
+                  )
                 )}
                 <button
                   className="rounded bg-[color:var(--surface-2)] px-3 py-1 text-[11px] uppercase tracking-wide text-muted transition hover:bg-[color:var(--surface-3)]"

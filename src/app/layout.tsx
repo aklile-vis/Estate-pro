@@ -21,6 +21,51 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Suppress React DevTools version parsing error
+              if (typeof window !== 'undefined') {
+                const originalConsoleError = console.error;
+                const originalConsoleWarn = console.warn;
+                
+                console.error = function(...args) {
+                  const message = args[0];
+                  if (typeof message === 'string' && (
+                    message.includes('Invalid argument not valid semver') ||
+                    message.includes('validateAndParse') ||
+                    message.includes('esm_compareVersions')
+                  )) {
+                    return; // Suppress React DevTools errors
+                  }
+                  originalConsoleError.apply(console, args);
+                };
+                
+                console.warn = function(...args) {
+                  const message = args[0];
+                  if (typeof message === 'string' && (
+                    message.includes('Invalid argument not valid semver') ||
+                    message.includes('validateAndParse') ||
+                    message.includes('esm_compareVersions')
+                  )) {
+                    return; // Suppress React DevTools warnings
+                  }
+                  originalConsoleWarn.apply(console, args);
+                };
+                
+                // Also suppress uncaught errors
+                window.addEventListener('error', function(event) {
+                  if (event.message && event.message.includes('Invalid argument not valid semver')) {
+                    event.preventDefault();
+                    return false;
+                  }
+                });
+              }
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className} suppressHydrationWarning={true}>
         <ErrorBoundary>
           <ThemeProvider>

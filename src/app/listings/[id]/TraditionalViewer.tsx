@@ -213,16 +213,6 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
     ...media.videos.map((video, index) => ({ type: 'video' as const, url: video.url, index, label: video.label }))
   ]
 
-  // Debug logging
-  console.log('Carousel Debug:', {
-    mediaImages: media.images,
-    mediaVideos: media.videos,
-    allMedia: allMedia,
-    allMediaLength: allMedia.length,
-    heroIndex: heroIndex,
-    currentHeroMedia: allMedia[heroIndex]
-  })
-
   // Set hero index to cover image when media is available (only on initial load)
   useEffect(() => {
     if (media.coverImage && media.images.length > 0 && !initialCoverSet.current) {
@@ -237,11 +227,9 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
   // Carousel navigation functions
   const nextHeroMedia = (e: React.MouseEvent) => {
     e.stopPropagation()
-    console.log('nextHeroMedia called', { currentIndex: heroIndex, allMediaLength: allMedia.length })
     if (allMedia.length > 0) {
       setHeroIndex((prev) => {
         const newIndex = (prev + 1) % allMedia.length
-        console.log('Setting hero index to:', newIndex)
         return newIndex
       })
     }
@@ -249,11 +237,9 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
 
   const prevHeroMedia = (e: React.MouseEvent) => {
     e.stopPropagation()
-    console.log('prevHeroMedia called', { currentIndex: heroIndex, allMediaLength: allMedia.length })
     if (allMedia.length > 0) {
       setHeroIndex((prev) => {
         const newIndex = (prev - 1 + allMedia.length) % allMedia.length
-        console.log('Setting hero index to:', newIndex)
         return newIndex
       })
     }

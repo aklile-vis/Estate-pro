@@ -11,11 +11,13 @@ import {
   PlayCircleIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { processCAD, uploadDesignFile } from '@/lib/backendClient'
+import { useWizardDataProtection } from '@/hooks/useWizardDataProtection'
+import WizardWarningModal from '@/components/WizardWarningModal'
 
 interface UploadSummary {
   fileId: string
@@ -81,11 +83,36 @@ export default function AgentUpload3DPage() {
   const [savedModelId, setSavedModelId] = useState<string | null>(null)
   const [savedUnitId, setSavedUnitId] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
+  const [editorChanges, setEditorChanges] = useState<any>(null)
   const [aiInsights, setAiInsights] = useState<Record<string, unknown> | null>(null)
   const [fileKind, setFileKind] = useState<UploadCategory | null>(null)
   const { token, user, isAuthenticated } = useAuth()
   const router = useRouter()
   const isAgent = user?.role === 'AGENT' || user?.role === 'ADMIN'
+
+  // Check if there's unsaved data
+  const hasUnsavedData = Boolean(result?.glbPath || upload?.filePath || editorChanges)
+
+  // Data protection
+  const { 
+    showWarningModal, 
+    protectedRouterPush, 
+    handleConfirmLeave, 
+    handleCancelLeave 
+  } = useWizardDataProtection({
+    hasUnsavedData,
+    onConfirmLeave: () => {
+      // Clear all wizard data when leaving
+      sessionStorage.removeItem('agent:uploadStep1')
+      sessionStorage.removeItem('agent:uploadStep2')
+      sessionStorage.removeItem('agent:uploadStep3')
+      sessionStorage.removeItem('agent:reviewDraft')
+      sessionStorage.removeItem('agent:editorChanges')
+    },
+    onCancelLeave: () => {
+      // Stay on the page
+    }
+  })
 
   const aiRooms = useMemo<AIRoom[]>(() => {
     if (!Array.isArray(aiInsights?.rooms)) return []
@@ -136,6 +163,82 @@ export default function AgentUpload3DPage() {
     setSavedUnitId(null)
     setAiInsights(null)
     setFileKind(null)
+    setEditorChanges(null)
+  }, [])
+
+  // Load editor changes and restore 3D processing state when returning from editor
+  useEffect(() => {
+    try {
+      // Check if wizard is still in progress (not published)
+      const isPublished = sessionStorage.getItem('agent:published') === 'true'
+      if (isPublished) {
+        // Wizard is complete, clear all data and start fresh
+        sessionStorage.removeItem('agent:uploadStep1')
+        sessionStorage.removeItem('agent:uploadStep2')
+        sessionStorage.removeItem('agent:uploadStep3')
+        sessionStorage.removeItem('agent:reviewDraft')
+        sessionStorage.removeItem('agent:editorChanges')
+        sessionStorage.removeItem('agent:published')
+        return
+      }
+      
+      const changesRaw = sessionStorage.getItem('agent:editorChanges')
+      if (changesRaw) {
+        const changes = JSON.parse(changesRaw)
+        setEditorChanges(changes)
+        // Clear the changes from storage after loading
+        sessionStorage.removeItem('agent:editorChanges')
+      }
+      
+      // Restore 3D processing state from sessionStorage
+      const step3Raw = sessionStorage.getItem('agent:uploadStep3')
+      if (step3Raw) {
+        const step3Data = JSON.parse(step3Raw)
+        
+        // Restore processing state
+        setStage('done')
+        setMessage('3D processing complete — ready to continue to review')
+        
+        // Restore upload and result data
+        if (step3Data.filePath) {
+          setUpload({
+            fileId: 'restored',
+            filePath: step3Data.filePath,
+            size: 0,
+            name: step3Data.fileName || '3D Model',
+          })
+        }
+        
+        if (step3Data.glbPath) {
+          setResult({
+            glbPath: step3Data.glbPath,
+            ifcPath: step3Data.ifcPath,
+            usdPath: step3Data.usdPath,
+            elementsCount: step3Data.elementsCount,
+            report: null,
+            aiEnrichment: step3Data.aiEnrichment,
+            glbMaterials: null,
+            lodReport: null,
+            usdError: null,
+          })
+        }
+        
+        // Restore other state
+        if (step3Data.topologyPath) {
+          setTopologyPath(step3Data.topologyPath)
+        }
+        if (step3Data.aiEnrichment) {
+          setAiInsights(step3Data.aiEnrichment)
+        }
+        
+        // Restore saved IDs if available
+        if (step3Data.unitId) {
+          setSavedUnitId(step3Data.unitId)
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
   }, [])
 
   const handleSelect = useCallback(async (file: File) => {
@@ -212,8 +315,9 @@ export default function AgentUpload3DPage() {
         if (topoJson?.aiEnrichment) setAiInsights(topoJson.aiEnrichment as Record<string, unknown>)
       }
 
+      // Create temporary PropertyUnit for editor access
       setStage('persist')
-      setMessage('Registering asset in library…')
+      setMessage('Preparing 3D editor…')
       try {
         const ingestHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
         if (token) ingestHeaders.Authorization = `Bearer ${token}`
@@ -251,7 +355,7 @@ export default function AgentUpload3DPage() {
       }
 
       setStage('done')
-      setMessage('Processing complete — open the viewers below')
+      setMessage('Processing complete — ready to continue to review')
     } catch (err) {
       console.error(err)
       setStage('error')
@@ -279,6 +383,28 @@ export default function AgentUpload3DPage() {
 
     if (!step1Data) {
       return
+    }
+
+    // Store 3D step data in sessionStorage
+    const step3Data = {
+      has3D: !skip3D && (result?.glbPath || upload?.filePath),
+      glbPath: result?.glbPath || null,
+      ifcPath: result?.ifcPath || null,
+      usdPath: result?.usdPath || null,
+      filePath: upload?.filePath || null,
+      fileName: upload?.name || null,
+      elementsCount: result?.elementsCount || 0,
+      aiEnrichment: aiInsights || null,
+      topologyPath: topologyPath || null,
+      processedAt: new Date().toISOString(),
+      unitId: savedUnitId || null,
+    }
+    
+    
+    try {
+      sessionStorage.setItem('agent:uploadStep3', JSON.stringify(step3Data))
+    } catch {
+      /* ignore storage errors */
     }
 
     const STORAGE_KEY = 'agent:reviewDraft'
@@ -322,7 +448,18 @@ export default function AgentUpload3DPage() {
         })(),
       },
       immersive: { 
-        has3D: skip3D ? false : (savedModelId || result?.glbPath)
+        has3D: step3Data.has3D,
+        glbPath: step3Data.glbPath,
+        ifcPath: step3Data.ifcPath,
+        usdPath: step3Data.usdPath,
+        filePath: step3Data.filePath,
+        fileName: step3Data.fileName,
+        elementsCount: step3Data.elementsCount,
+        aiEnrichment: step3Data.aiEnrichment,
+        topologyPath: step3Data.topologyPath,
+        processedAt: step3Data.processedAt,
+        editorChanges: editorChanges,
+        unitId: savedUnitId,
       },
     }
     try {
@@ -331,11 +468,11 @@ export default function AgentUpload3DPage() {
       /* ignore storage errors */
     }
     router.push('/agent/review')
-  }, [savedModelId, result?.glbPath, router])
+  }, [result, upload, aiInsights, topologyPath, editorChanges, savedUnitId, router])
 
   // Go back to media step
   const goBackToMedia = useCallback(() => {
-    router.back()
+    router.push('/agent/upload/media')
   }, [router])
 
   return (
@@ -463,7 +600,7 @@ export default function AgentUpload3DPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {savedUnitId && (
-                    <Link href={`/agent/editor/${encodeURIComponent(savedUnitId)}`} className="btn btn-primary">
+                    <Link href={`/agent/editor/${encodeURIComponent(savedUnitId)}?returnTo=wizard`} className="btn btn-primary">
                       <CubeIcon className="h-4 w-4" /> Edit in 3D Editor
                     </Link>
                   )}
@@ -487,8 +624,7 @@ export default function AgentUpload3DPage() {
                 </div>
                 {!savedUnitId && (
                   <p className="text-xs text-muted">
-                    The editor opens automatically once the processed unit is saved. Please retry the ingest step if no
-                    editor link appears.
+                    Complete the 3D processing to enable the editor link.
                   </p>
                 )}
                 {result.usdError && (
@@ -592,19 +728,19 @@ export default function AgentUpload3DPage() {
                   Geometry checks, AI enrichment, and catalog defaults are complete. Assets are registered and ready for
                   the editor, pricing tools, and public listings.
                 </p>
-                {savedModelId && (
+                {result?.glbPath && (
                   <p className="mt-2 text-xs text-secondary">
-                    Registered model id:
+                    GLB Model:
                     <code className="ml-1 rounded bg-[color:var(--success-500)]/20 px-1 text-[color:var(--success-500)]">
-                      {savedModelId}
+                      {result.glbPath.split('/').pop()}
                     </code>
                   </p>
                 )}
-                {savedUnitId && (
+                {result?.elementsCount && (
                   <p className="text-xs text-secondary">
-                    Property unit id:
+                    Elements processed:
                     <code className="ml-1 rounded bg-[color:var(--success-500)]/20 px-1 text-[color:var(--success-500)]">
-                      {savedUnitId}
+                      {result.elementsCount}
                     </code>
                   </p>
                 )}
@@ -636,12 +772,18 @@ export default function AgentUpload3DPage() {
             <div className="surface-soft space-y-3 p-5 text-sm text-muted">
               <p className="text-xs uppercase tracking-wide text-muted">Need to manage existing uploads?</p>
               <div className="flex flex-col gap-2">
-                <Link href="/agent/unified-upload" className="btn btn-secondary">
+                <button 
+                  onClick={() => protectedRouterPush('/agent/unified-upload')} 
+                  className="btn btn-secondary"
+                >
                   Power tools workspace
-                </Link>
-                <Link href="/agent/units" className="btn btn-secondary">
+                </button>
+                <button 
+                  onClick={() => protectedRouterPush('/agent/units')} 
+                  className="btn btn-secondary"
+                >
                   Go to units
-                </Link>
+                </button>
               </div>
             </div>
           </aside>
@@ -666,6 +808,17 @@ export default function AgentUpload3DPage() {
           </button>
         </div>
       </div>
+
+      {/* Warning Modal */}
+      <WizardWarningModal
+        isOpen={showWarningModal}
+        onConfirm={handleConfirmLeave}
+        onCancel={handleCancelLeave}
+        title="Leave 3D Pipeline?"
+        message="You have unsaved 3D processing data that will be lost if you leave this step."
+        confirmText="Leave Anyway"
+        cancelText="Stay Here"
+      />
     </div>
   )
 }

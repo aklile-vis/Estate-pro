@@ -110,13 +110,49 @@ export async function POST(request: NextRequest) {
       const editorState = body.immersive ? {
         immersive: {
           has3D: body.immersive.has3D || false,
+          glbPath: body.immersive.glbPath || null,
+          ifcPath: body.immersive.ifcPath || null,
+          usdPath: body.immersive.usdPath || null,
+          filePath: body.immersive.filePath || null,
+          fileName: body.immersive.fileName || null,
+          elementsCount: body.immersive.elementsCount || 0,
+          aiEnrichment: body.immersive.aiEnrichment || null,
+          topologyPath: body.immersive.topologyPath || null,
+          processedAt: body.immersive.processedAt || null,
+          editorChanges: body.immersive.editorChanges || null,
         }
       } : null
+
+      // Create a FileUpload record for the 3D assets if we have GLB data
+      let fileUploadId = null
+      if (body.immersive?.glbPath) {
+        // Check if file exists
+        const fs = require('fs')
+        const glbPath = body.immersive.glbPath
+        const fileExists = fs.existsSync(glbPath)
+        
+        const fileUpload = await prisma.fileUpload.create({
+          data: {
+            filename: body.immersive.fileName || '3d-model.glb',
+            originalName: body.immersive.fileName || '3d-model.glb',
+            filePath: body.immersive.filePath || '',
+            fileSize: fileExists ? fs.statSync(glbPath).size : 0,
+            mimeType: 'model/gltf-binary',
+            status: 'COMPLETED',
+            glbFilePath: body.immersive.glbPath,
+            ifcFilePath: body.immersive.ifcPath || null,
+            processedFilePath: body.immersive.topologyPath || null,
+            userId: auth.user.id,
+          }
+        })
+        fileUploadId = fileUpload.id
+      }
 
       const newUnit = await prisma.propertyUnit.create({
         data: {
           name: listingData.title, // Use title as the name for PropertyUnit
           editorState: editorState,
+          fileUploadId: fileUploadId,
         },
       })
       targetUnitId = newUnit.id

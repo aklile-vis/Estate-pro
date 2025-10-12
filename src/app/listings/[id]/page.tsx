@@ -130,8 +130,13 @@ function Model({
   url: string
   onCategorized: (cats: Record<MaterialCategory, THREE.Mesh[]>, defaults: CategorizedDefaults) => void
 }) {
+  if (!url) {
+    return null
+  }
+  
   const gltf = useGLTF(url)
   const scene = gltf.scene as THREE.Group
+  
   useEffect(() => {
     const cats: Record<MaterialCategory, THREE.Mesh[]> = { wall: [], floor: [], ceiling: [] }
     const defaults: Record<MaterialCategory, Set<string>> = {
@@ -502,7 +507,10 @@ export default function PublicListingPage() {
     return () => controller.abort()
   }, [isAuthenticated, token, data?.unit?.id, calculateBreakdown])
 
-  const modelUrl = useMemo(() => data?.unit?.file?.glbPath ? `/api/files/binary?path=${encodeURIComponent(data.unit.file.glbPath)}&listingId=${encodeURIComponent(String(id))}` : '', [data?.unit?.file?.glbPath, id])
+  const modelUrl = useMemo(() => {
+    const glbPath = data?.unit?.file?.glbFilePath || data?.unit?.file?.glbPath
+    return glbPath ? `/api/files/binary?path=${encodeURIComponent(glbPath)}&listingId=${encodeURIComponent(String(id))}` : ''
+  }, [data?.unit?.file?.glbFilePath, data?.unit?.file?.glbPath, id])
 
   const computePrice = useCallback(
     (overrideSelection?: typeof selected) => {
@@ -866,12 +874,26 @@ export default function PublicListingPage() {
                   <ambientLight intensity={0.6} />
                   <directionalLight position={[5, 10, 5]} intensity={0.9} castShadow />
                   <Environment preset="city" />
-                  {isXrMode ? (
-                    <XR store={xrStore}>
+                  {modelUrl ? (
+                    isXrMode ? (
+                      <XR store={xrStore}>
+                        <Model url={modelUrl} onCategorized={handleCategorized} />
+                      </XR>
+                    ) : (
                       <Model url={modelUrl} onCategorized={handleCategorized} />
-                    </XR>
+                    )
                   ) : (
-                    <Model url={modelUrl} onCategorized={handleCategorized} />
+                    <div className="flex h-full w-full items-center justify-center">
+                      <div className="text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[color:var(--surface-2)]">
+                          <svg className="h-8 w-8 text-disabled animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-semibold text-primary mb-2">Preparing 3D viewer…</h3>
+                        <p className="text-sm text-muted">Loading 3D model and materials</p>
+                      </div>
+                    </div>
                   )}
                   {!isXrMode && (
                     <OrbitControls
