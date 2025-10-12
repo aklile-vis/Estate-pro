@@ -1194,4 +1194,4 @@ function PanelSection({ title, defaultOpen = true, children }: PanelSectionProps
   )
 }
 
-useGLTF.preload('/placeholder.glb')
+// Removed placeholder.glb preload as it doesn't exist

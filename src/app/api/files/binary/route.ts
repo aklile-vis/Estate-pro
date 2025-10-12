@@ -91,7 +91,13 @@ async function ensureListingAllowsAccess(listingId: string, targetPath: string) 
   const mediaPaths = listing.unit?.media?.map(media => media.url) || []
   
   const allPaths = [...assetPaths, ...mediaPaths].filter(Boolean)
-  return allPaths.some((assetPath) => resolve(String(assetPath)) === targetPath)
+  
+  // Check if the target path matches any of the allowed paths
+  return allPaths.some((assetPath) => {
+    if (!assetPath) return false
+    const resolvedAssetPath = resolve(String(assetPath))
+    return resolvedAssetPath === targetPath
+  })
 }
 
 export async function GET(request: NextRequest) {

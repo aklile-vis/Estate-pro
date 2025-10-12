@@ -205,7 +205,13 @@ export default function TraditionalViewer({ listing }: { listing?: ListingUnitPa
 
 
   // Build absolute URLs for stored paths
-  const toAbsolute = (url: string) => (url?.startsWith('http') ? url : `/api/files/binary?path=${encodeURIComponent(url)}`)
+  const toAbsolute = (url: string) => {
+    if (url?.startsWith('http')) return url
+    const listingId = realData?.id
+    return listingId 
+      ? `/api/files/binary?path=${encodeURIComponent(url)}&listingId=${encodeURIComponent(listingId)}`
+      : `/api/files/binary?path=${encodeURIComponent(url)}`
+  }
 
   // Combine images and videos for carousel
   const allMedia = [
