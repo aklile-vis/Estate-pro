@@ -6,7 +6,6 @@ import {
   XMarkIcon,
   HomeIcon,
   HeartIcon,
-  BellIcon,
   BuildingOffice2Icon,
 } from '@heroicons/react/24/outline'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -281,10 +280,7 @@ export default function Header() {
                     Saved
                   </Link>
                 )}
-                <button className="btn btn-secondary hidden xl:flex">
-                  <BellIcon className="h-4 w-4" />
-                  Alerts
-                </button>
+                {null}
                 <div ref={profileMenuRefDesktop} className="relative">
                   <button
                     aria-haspopup="menu"
