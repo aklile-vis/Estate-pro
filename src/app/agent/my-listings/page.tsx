@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { formatPrice } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import WizardWarningModal from '@/components/WizardWarningModal'
 
 type Listing = {
   id: string
@@ -73,6 +74,7 @@ export default function MyListingsPage() {
 
   const performDelete = async () => {
     if (!confirm?.id) return
+    if (deletingId) return
     const id = confirm.id
     setDeletingId(id)
     setStatus('')
@@ -252,34 +254,15 @@ export default function MyListingsPage() {
             )
           })}
         </div>
-        {confirm && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setConfirm(null)} />
-            <div
-              role="dialog"
-              aria-modal="true"
-              className="relative z-10 w-[90%] max-w-md rounded-2xl border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] p-6 shadow-[var(--shadow-soft-raised)]"
-            >
-              <h3 className="text-lg font-semibold text-primary">Delete listing?</h3>
-              <p className="mt-2 text-sm text-secondary">
-                “{confirm.title}” will be removed from your listings. This action cannot be undone.
-              </p>
-              <div className="mt-5 flex items-center justify-end gap-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${deletingId === confirm.id ? 'opacity-60 cursor-not-allowed' : ''} btn-danger`}
-                  onClick={performDelete}
-                  disabled={deletingId === confirm.id}
-                >
-                  {deletingId === confirm.id ? 'Deleting…' : 'Delete'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <WizardWarningModal
+          isOpen={!!confirm}
+          onConfirm={performDelete}
+          onCancel={() => setConfirm(null)}
+          title="Delete listing?"
+          message={`“${confirm?.title ?? ''}” will be removed from your listings. This action cannot be undone.`}
+          confirmText={deletingId && confirm?.id === deletingId ? 'Deleting…' : 'Delete'}
+          cancelText="Cancel"
+        />
       </div>
     </div>
   )
