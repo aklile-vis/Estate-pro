@@ -10,11 +10,11 @@ import {
   PhotoIcon,
   FunnelIcon,
   AdjustmentsHorizontalIcon,
-  HeartIcon,
+  BookmarkIcon,
   ShareIcon,
 } from '@heroicons/react/24/outline'
-import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
-import { motion } from 'framer-motion'
+import { BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid'
+import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 
 import { formatPrice } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import RemoveSavedModal from '@/components/RemoveSavedModal'
 
 // Inline icons for bed, bath, and area to better reflect specs
 const BedIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -125,6 +126,10 @@ export default function ListingsIndexPage() {
   const [sortBy, setSortBy] = useState<SortOption>('newest')
   const [showFilters, setShowFilters] = useState(false)
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
+  const [animatingBookmarks, setAnimatingBookmarks] = useState<Set<string>>(new Set())
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [showRemoveModal, setShowRemoveModal] = useState(false)
+  const [propertyToRemove, setPropertyToRemove] = useState<{ id: string; title: string } | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(12)
@@ -141,6 +146,7 @@ export default function ListingsIndexPage() {
   const [showPriceDropdown, setShowPriceDropdown] = useState(false)
   const priceRef = useRef<HTMLDivElement>(null)
   const { user, isAuthenticated } = useAuth()
+  const isAgent = user?.role === 'AGENT' || user?.role === 'ADMIN'
 
   useEffect(() => {
     const load = async () => {
@@ -405,21 +411,38 @@ export default function ListingsIndexPage() {
 
   const toggleFavorite = async (listingId: string) => {
     const isFav = favorites.has(listingId)
+    
+    if (isFav) {
+      // Show confirmation modal for removal
+      const listing = listings.find(l => l.id === listingId)
+      if (listing) {
+        setPropertyToRemove({ id: listingId, title: listing.title })
+        setShowRemoveModal(true)
+        return
+      }
+    }
+    
+    // Start animation for adding
+    setAnimatingBookmarks(prev => new Set(prev).add(listingId))
+    
     // Optimistic update
     setFavorites(prev => {
       const next = new Set(prev)
       if (isFav) next.delete(listingId); else next.add(listingId)
       return next
     })
+    
     try {
       if (isFav) {
         await fetch(`/api/saved/${listingId}`, { method: 'DELETE' })
+        setToast({ message: 'Removed from saved listings', type: 'success' })
       } else {
         await fetch('/api/saved', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ listingId })
         })
+        setToast({ message: 'Added to saved listings', type: 'success' })
       }
     } catch {
       // Revert on failure
@@ -428,7 +451,71 @@ export default function ListingsIndexPage() {
         if (isFav) next.add(listingId); else next.delete(listingId)
         return next
       })
+      setToast({ message: 'Failed to update saved listings', type: 'error' })
+    } finally {
+      // End animation after a delay
+      setTimeout(() => {
+        setAnimatingBookmarks(prev => {
+          const next = new Set(prev)
+          next.delete(listingId)
+          return next
+        })
+      }, 600)
+      
+      // Auto-hide toast after 3 seconds
+      setTimeout(() => {
+        setToast(null)
+      }, 3000)
     }
+  }
+
+  const confirmRemove = async () => {
+    if (!propertyToRemove) return
+    
+    // Start animation
+    setAnimatingBookmarks(prev => new Set(prev).add(propertyToRemove.id))
+    
+    // Optimistic update
+    setFavorites(prev => {
+      const next = new Set(prev)
+      next.delete(propertyToRemove.id)
+      return next
+    })
+    
+    try {
+      await fetch(`/api/saved/${propertyToRemove.id}`, { method: 'DELETE' })
+      setToast({ message: 'Removed from saved listings', type: 'success' })
+    } catch {
+      // Revert on failure
+      setFavorites(prev => {
+        const next = new Set(prev)
+        next.add(propertyToRemove.id)
+        return next
+      })
+      setToast({ message: 'Failed to remove from saved listings', type: 'error' })
+    } finally {
+      setShowRemoveModal(false)
+      setPropertyToRemove(null)
+      
+      // End animation after a delay
+      setTimeout(() => {
+        setAnimatingBookmarks(prev => {
+          const next = new Set(prev)
+          next.delete(propertyToRemove.id)
+          return next
+        })
+      }, 600)
+      
+      // Auto-hide toast after 3 seconds
+      setTimeout(() => {
+        setToast(null)
+      }, 3000)
+    }
+  }
+
+  const cancelRemove = () => {
+    setShowRemoveModal(false)
+    setPropertyToRemove(null)
   }
 
   const getUniqueCities = () => {
@@ -999,20 +1086,27 @@ export default function ListingsIndexPage() {
                 >
                   {/* Quick Actions */}
                   <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
-                    {isAuthenticated && (
+                    {isAuthenticated && !isAgent && (
                       <button
                         onClick={(e) => {
                           e.preventDefault()
                           e.stopPropagation()
                           toggleFavorite(listing.id)
                         }}
-                        className="rounded-full bg-white/90 p-2 shadow-sm hover:bg-white transition-colors"
+                        className={`rounded-full bg-white/90 p-2 shadow-sm hover:bg-white transition-all duration-300 ${
+                          animatingBookmarks.has(listing.id) ? 'scale-110' : 'scale-100'
+                        }`}
                       >
-                        {isFavorite ? (
-                          <HeartSolidIcon className="h-5 w-5 text-red-500" />
-                        ) : (
-                          <HeartIcon className="h-5 w-5 text-gray-600" />
-                        )}
+                        <motion.div
+                          animate={animatingBookmarks.has(listing.id) ? { scale: [1, 1.2, 1] } : {}}
+                          transition={{ duration: 0.6, ease: "easeInOut" }}
+                        >
+                          {isFavorite ? (
+                            <BookmarkSolidIcon className="h-5 w-5 text-[color:var(--brand-600)]" />
+                          ) : (
+                            <BookmarkIcon className="h-5 w-5 text-gray-600" />
+                          )}
+                        </motion.div>
                       </button>
                     )}
                     <button
@@ -1269,20 +1363,27 @@ export default function ListingsIndexPage() {
                         
                         {/* Quick Actions */}
                         <div className="flex items-center gap-2 ml-4">
-                          {isAuthenticated && (
+                          {isAuthenticated && !isAgent && (
                             <button
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
                                 toggleFavorite(listing.id)
                               }}
-                              className="rounded-full bg-gray-100 p-2 hover:bg-gray-200 transition-colors"
+                              className={`rounded-full bg-gray-100 p-2 hover:bg-gray-200 transition-all duration-300 ${
+                                animatingBookmarks.has(listing.id) ? 'scale-110' : 'scale-100'
+                              }`}
                             >
-                              {isFavorite ? (
-                                <HeartSolidIcon className="h-5 w-5 text-red-500" />
-                              ) : (
-                                <HeartIcon className="h-5 w-5 text-gray-600" />
-                              )}
+                              <motion.div
+                                animate={animatingBookmarks.has(listing.id) ? { scale: [1, 1.2, 1] } : {}}
+                                transition={{ duration: 0.6, ease: "easeInOut" }}
+                              >
+                                {isFavorite ? (
+                                  <BookmarkSolidIcon className="h-5 w-5 text-[color:var(--brand-600)]" />
+                                ) : (
+                                  <BookmarkIcon className="h-5 w-5 text-gray-600" />
+                                )}
+                              </motion.div>
                             </button>
                           )}
                           <button
@@ -1429,6 +1530,60 @@ export default function ListingsIndexPage() {
           </div>
         )}
       </div>
+      
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm"
+          >
+            <div className={`rounded-2xl border p-4 shadow-lg backdrop-blur-sm ${
+              toast.type === 'success' 
+                ? 'bg-green-50/90 border-green-200 text-green-800' 
+                : 'bg-red-50/90 border-red-200 text-red-800'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${
+                  toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                  {toast.type === 'success' ? (
+                    <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">{toast.message}</p>
+                </div>
+                <button
+                  onClick={() => setToast(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Remove Confirmation Modal */}
+      <RemoveSavedModal
+        isOpen={showRemoveModal}
+        onConfirm={confirmRemove}
+        onCancel={cancelRemove}
+        propertyTitle={propertyToRemove?.title}
+      />
     </div>
   )
 }

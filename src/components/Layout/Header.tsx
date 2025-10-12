@@ -5,7 +5,7 @@ import {
   Bars3Icon,
   XMarkIcon,
   HomeIcon,
-  HeartIcon,
+  BookmarkIcon,
   BuildingOffice2Icon,
 } from '@heroicons/react/24/outline'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -276,7 +276,7 @@ export default function Header() {
                   </Link>
                 ) : (
                   <Link href="/saved" className="btn btn-secondary hidden xl:flex">
-                    <HeartIcon className="h-4 w-4" />
+                    <BookmarkIcon className="h-4 w-4" />
                     Saved
                   </Link>
                 )}

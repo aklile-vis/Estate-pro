@@ -7,9 +7,9 @@ import {
   Square3Stack3DIcon,
   CurrencyDollarIcon,
   PhotoIcon,
-  HeartIcon,
+  BookmarkIcon,
 } from '@heroicons/react/24/outline'
-import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
+import { BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -17,6 +17,8 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { formatPrice } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import RemoveSavedModal from '@/components/RemoveSavedModal'
+import { AnimatePresence } from 'framer-motion'
 
 type Listing = {
   id: string
@@ -34,6 +36,9 @@ export default function SavedListingsPage() {
   const [list, setList] = useState<Listing[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showRemoveModal, setShowRemoveModal] = useState(false)
+  const [propertyToRemove, setPropertyToRemove] = useState<{ id: string; title: string } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const listingIds = useMemo(() => new Set(list.map(l => l.id)), [list])
 
@@ -60,21 +65,61 @@ export default function SavedListingsPage() {
 
   const toggleSave = async (listingId: string) => {
     const isSaved = listingIds.has(listingId)
-    // Optimistic update
-    setList(prev => isSaved ? prev.filter(l => l.id !== listingId) : prev)
-    try {
-      if (isSaved) {
-        await fetch(`/api/saved/${listingId}`, { method: 'DELETE' })
-      } else {
+    
+    if (isSaved) {
+      // Show confirmation modal for removal
+      const listing = list.find(l => l.id === listingId)
+      if (listing) {
+        setPropertyToRemove({ id: listingId, title: listing.title })
+        setShowRemoveModal(true)
+      }
+    } else {
+      // Direct add (no confirmation needed)
+      setList(prev => [...prev, { id: listingId, title: 'Property', basePrice: 0 }])
+      try {
         await fetch('/api/saved', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ listingId })
         })
+      } catch {
+        // Revert on failure
+        setList(prev => prev.filter(l => l.id !== listingId))
       }
-    } catch {
-      // Revert: on failure, do nothing special for now
     }
+  }
+
+  const confirmRemove = async () => {
+    if (!propertyToRemove) return
+    
+    // Optimistic update
+    setList(prev => prev.filter(l => l.id !== propertyToRemove.id))
+    
+    try {
+      await fetch(`/api/saved/${propertyToRemove.id}`, { method: 'DELETE' })
+      setToast({ message: 'Removed from saved listings', type: 'success' })
+    } catch {
+      // Revert on failure
+      setList(prev => [...prev, { 
+        id: propertyToRemove.id, 
+        title: propertyToRemove.title, 
+        basePrice: 0 
+      }])
+      setToast({ message: 'Failed to remove from saved listings', type: 'error' })
+    } finally {
+      setShowRemoveModal(false)
+      setPropertyToRemove(null)
+      
+      // Auto-hide toast after 3 seconds
+      setTimeout(() => {
+        setToast(null)
+      }, 3000)
+    }
+  }
+
+  const cancelRemove = () => {
+    setShowRemoveModal(false)
+    setPropertyToRemove(null)
   }
 
   if (!isAuthenticated) {
@@ -87,10 +132,10 @@ export default function SavedListingsPage() {
           
           <div className="container relative py-16 lg:py-24">
             <div className="text-center max-w-2xl mx-auto">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-[color:var(--surface-border)] mb-6">
-                <HeartIcon className="h-4 w-4 text-[color:var(--brand-600)]" />
-                <span className="text-sm font-medium text-[color:var(--brand-700)]">Your Personal Collection</span>
-              </div>
+               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-[color:var(--surface-border)] mb-6">
+                 <BookmarkIcon className="h-4 w-4 text-[color:var(--brand-600)]" />
+                 <span className="text-sm font-medium text-[color:var(--brand-700)]">Your Personal Collection</span>
+               </div>
               
               <h1 className="text-4xl sm:text-5xl font-bold text-primary mb-6">
                 Saved Listings
@@ -120,10 +165,10 @@ export default function SavedListingsPage() {
         <div className="container relative py-12 lg:py-16">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-[color:var(--surface-border)]">
-                <HeartSolidIcon className="h-4 w-4 text-[color:var(--brand-600)]" />
-                <span className="text-sm font-medium text-[color:var(--brand-700)]">Your Personal Collection</span>
-              </div>
+               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-[color:var(--surface-border)]">
+                 <BookmarkSolidIcon className="h-4 w-4 text-[color:var(--brand-600)]" />
+                 <span className="text-sm font-medium text-[color:var(--brand-700)]">Your Personal Collection</span>
+               </div>
               
               <div>
                 <h1 className="text-4xl sm:text-5xl font-bold text-primary mb-3">
@@ -191,14 +236,14 @@ export default function SavedListingsPage() {
         {!loading && list.length === 0 && !error && (
           <div className="glass rounded-3xl border-2 border-dashed border-[color:var(--surface-border)] p-16 text-center">
             <div className="space-y-6 max-w-md mx-auto">
-              <div className="p-4 rounded-full bg-[color:var(--brand-500-12)] w-20 h-20 mx-auto flex items-center justify-center">
-                <HeartIcon className="h-10 w-10 text-[color:var(--brand-600)]" />
-              </div>
+               <div className="p-4 rounded-full bg-[color:var(--brand-500-12)] w-20 h-20 mx-auto flex items-center justify-center">
+                 <BookmarkIcon className="h-10 w-10 text-[color:var(--brand-600)]" />
+               </div>
               <div className="space-y-3">
                 <h3 className="text-2xl font-bold text-primary">No saved listings yet</h3>
                 <p className="text-secondary leading-relaxed">
                   Start building your personal collection by saving properties that catch your eye. 
-                  Browse our listings and click the heart icon to save your favorites.
+                  Browse our listings and click the bookmark icon to save your favorites.
                 </p>
               </div>
               <Link href="/listings" className="btn btn-primary px-8 py-3 text-base font-semibold shadow-lg hover:shadow-xl">
@@ -232,15 +277,15 @@ export default function SavedListingsPage() {
                     transition={{ duration: 0.45, delay: index * 0.05 }}
                     className="group relative overflow-hidden rounded-2xl border border-[color:var(--surface-border)] bg-white shadow-lg hover:shadow-xl transition-all duration-300"
                   >
-                    {/* Heart Button */}
-                    <div className="absolute right-4 top-4 z-10">
-                      <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSave(listing.id) }}
-                        className="rounded-full bg-white/90 p-2 shadow-sm hover:bg-white transition-colors"
-                      >
-                        <HeartSolidIcon className="h-5 w-5 text-red-500" />
-                      </button>
-                    </div>
+                     {/* Bookmark Button */}
+                     <div className="absolute right-4 top-4 z-10">
+                       <button
+                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSave(listing.id) }}
+                         className="rounded-full bg-white/90 p-2 shadow-sm hover:bg-white transition-colors"
+                       >
+                         <BookmarkSolidIcon className="h-5 w-5 text-[color:var(--brand-600)]" />
+                       </button>
+                     </div>
 
                     <Link href={`/listings/${listing.id}`} className="flex h-full flex-col">
                       {/* Image */}
@@ -314,6 +359,60 @@ export default function SavedListingsPage() {
         )}
         </div>
       </div>
+      
+      {/* Remove Confirmation Modal */}
+      <RemoveSavedModal
+        isOpen={showRemoveModal}
+        onConfirm={confirmRemove}
+        onCancel={cancelRemove}
+        propertyTitle={propertyToRemove?.title}
+      />
+      
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 50, scale: 0.9 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm"
+          >
+            <div className={`rounded-2xl border p-4 shadow-lg backdrop-blur-sm ${
+              toast.type === 'success' 
+                ? 'bg-green-50/90 border-green-200 text-green-800' 
+                : 'bg-red-50/90 border-red-200 text-red-800'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${
+                  toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                  {toast.type === 'success' ? (
+                    <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">{toast.message}</p>
+                </div>
+                <button
+                  onClick={() => setToast(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

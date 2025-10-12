@@ -9,7 +9,7 @@ import {
   PhotoIcon,
   EllipsisVerticalIcon,
 } from '@heroicons/react/24/outline'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -39,6 +39,7 @@ export default function MyListingsPage() {
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null)
   const menuRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [confirm, setConfirm] = useState<{ id: string; title: string } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -86,11 +87,18 @@ export default function MyListingsPage() {
       }
       setListings((prev) => prev.filter((l) => l.id !== id))
       setConfirm(null)
+      setToast({ message: 'Listing deleted successfully', type: 'success' })
     } catch (err) {
       const message = (err as Error)?.message || 'Failed to delete listing'
       setStatus(message)
+      setToast({ message: 'Failed to delete listing', type: 'error' })
     } finally {
       setDeletingId(null)
+      
+      // Auto-hide toast after 3 seconds
+      setTimeout(() => {
+        setToast(null)
+      }, 3000)
     }
   }
 
@@ -374,6 +382,52 @@ export default function MyListingsPage() {
           confirmText={deletingId && confirm?.id === deletingId ? 'Deleting…' : 'Delete'}
           cancelText="Cancel"
         />
+        
+        {/* Toast Notification */}
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.9 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="fixed bottom-6 right-6 z-50 max-w-sm"
+            >
+              <div className={`rounded-2xl border p-4 shadow-lg backdrop-blur-sm ${
+                toast.type === 'success' 
+                  ? 'bg-green-50/90 border-green-200 text-green-800' 
+                  : 'bg-red-50/90 border-red-200 text-red-800'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${
+                    toast.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                    {toast.type === 'success' ? (
+                      <svg className="h-5 w-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold">{toast.message}</p>
+                  </div>
+                  <button
+                    onClick={() => setToast(null)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         </div>
       </div>
     </div>
