@@ -20,7 +20,7 @@ const navigation = {
 
 export default function Footer() {
   return (
-    <footer className="mt-auto border-t border-[color:var(--surface-border)] bg-[color:var(--surface-0)]">
+    <footer className="flex-shrink-0 border-t border-[color:var(--surface-border)] bg-[color:var(--surface-0)]">
       <div className="container py-12 text-muted">
         <div className="grid gap-12 md:grid-cols-4">
           <div className="space-y-4">

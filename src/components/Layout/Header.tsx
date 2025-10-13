@@ -245,11 +245,17 @@ export default function Header() {
             href="/"
             className="flex items-center gap-3 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-1)] px-4 py-2 shadow-sm transition hover:border-[color:var(--surface-border-strong)] hover:bg-[color:var(--surface-hover)]"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[color:var(--sand-400)] to-[color:var(--sand-600)] text-[color:var(--overlay-text-primary)] shadow-md">
-              <HomeIcon className="h-5 w-5" />
-            </span>
+            <div className="flex h-12 w-12 items-center justify-center rounded-full overflow-hidden shadow-md" style={{ background: 'linear-gradient(135deg, var(--brand-400), var(--brand-600))' }}>
+              <Image
+                src="/logo/logo.png"
+                alt="EstatePro Logo"
+                width={48}
+                height={48}
+                className="h-full w-full object-contain"
+              />
+            </div>
             <div className="flex flex-col">
-              <span className="text-sm uppercase tracking-[0.3em] text-muted">EstatePro</span>
+              <span className="text-sm uppercase tracking-[0.3em] text-muted">Fitit</span>
               <span className="text-sm font-semibold text-primary">3D Real Estate</span>
             </div>
           </Link>
