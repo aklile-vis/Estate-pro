@@ -571,7 +571,7 @@ export default function ListingsIndexPage() {
         </div>
       </header>
 
-      <div className="glass relative z-[200] space-y-6 border border-[color:var(--surface-border)] p-6">
+      <div className="glass relative space-y-6 border border-[color:var(--surface-border)] p-6">
         {/* Search and Controls */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">

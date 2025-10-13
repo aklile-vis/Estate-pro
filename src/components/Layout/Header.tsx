@@ -238,7 +238,7 @@ export default function Header() {
   }, [])
 
   return (
-    <header className="surface-header sticky inset-x-0 top-0 z-50 backdrop-blur-xl">
+    <header className="surface-header sticky inset-x-0 top-0 z-50 backdrop-blur-xl supports-[backdrop-filter]:bg-[color:var(--surface-header)]">
       <div className="container">
         <div className="flex h-20 items-center justify-between gap-6">
           <Link
