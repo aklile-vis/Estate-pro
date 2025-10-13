@@ -95,6 +95,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
     setUser(null)
     setToken(null)
+    // Redirect to login page after logout
+    window.location.href = '/login'
   }, [])
 
   const value = useMemo(

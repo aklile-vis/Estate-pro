@@ -20,6 +20,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
+      // Always redirect to listings page for regular users, agents go to dashboard
       const destination = user?.role === 'AGENT' ? '/agent/dashboard' : '/listings'
       router.replace(destination)
     }
@@ -33,6 +34,7 @@ export default function LoginPage() {
     const result = await login(email, password)
 
     if (result.success) {
+      // Always redirect to listings page for regular users, agents go to dashboard
       const destination = result.user?.role === 'AGENT' ? '/agent/dashboard' : '/listings'
       router.replace(destination)
     } else {

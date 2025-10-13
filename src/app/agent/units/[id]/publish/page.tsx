@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import ListingSuccessModal from '@/components/ListingSuccessModal'
 import { SUPPORTED_CURRENCIES, convertAmount, formatPrice } from '@/lib/utils'
 
 type ListingFormState = {
@@ -61,6 +62,8 @@ export default function PublishUnitPage() {
   const [heroLoading, setHeroLoading] = useState(false)
   const [uploadingHero, setUploadingHero] = useState(false)
   const heroUploadRef = useRef<HTMLInputElement | null>(null)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [publishedListingTitle, setPublishedListingTitle] = useState('')
 
   const isAgent = useMemo(() => user?.role === 'AGENT' || user?.role === 'ADMIN', [user?.role])
   const basePriceEtb = useMemo(() => {
@@ -272,18 +275,20 @@ useEffect(() => {
 
       setStatus(
         publishSucceeded
-          ? 'Listing published successfully. Redirecting to the buyer experience…'
+          ? 'Listing published successfully!'
           : 'Listing saved as draft. Finalize from the units dashboard when you are ready.'
       )
-      setTimeout(() => {
-        if (publishSucceeded && listingId) {
-          router.replace(`/listings/${encodeURIComponent(listingId)}`)
-        } else if (publishSucceeded) {
-          router.replace('/listings')
-        } else {
+      
+      if (publishSucceeded) {
+        // Show success modal instead of redirecting
+        setPublishedListingTitle(form.title || 'Your listing')
+        setShowSuccessModal(true)
+      } else {
+        // Only redirect for draft saves
+        setTimeout(() => {
           router.replace('/agent/units')
-        }
-      }, 800)
+        }, 800)
+      }
     } catch (err: unknown) {
       setError((err as Error)?.message || 'Unable to publish listing')
     } finally {
@@ -536,6 +541,13 @@ useEffect(() => {
           {saving ? 'Publishing…' : 'Publish & continue'}
         </button>
       </form>
+
+      {/* Success Modal */}
+      <ListingSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        listingTitle={publishedListingTitle}
+      />
     </div>
   )
 }

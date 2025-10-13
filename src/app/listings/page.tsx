@@ -1316,7 +1316,7 @@ export default function ListingsIndexPage() {
                       </div>
                       
                       {/* Status Tags */}
-                      <div className="absolute left-4 top-4">
+                      <div className="absolute left-4 top-4 flex flex-col gap-2">
                         {listing.has3D ? (
                           <div className="inline-flex items-center gap-1 rounded-full bg-[color:var(--brand-600)] px-3 py-1 text-xs font-semibold text-white shadow-sm">
                             <Square3Stack3DIcon className="h-3 w-3" />

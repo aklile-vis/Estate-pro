@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from 'next/navigation'
 
 import { useAuth } from '@/contexts/AuthContext'
+import ListingSuccessModal from '@/components/ListingSuccessModal'
 import {
   CheckBadgeIcon,
   ClipboardDocumentListIcon,
@@ -174,6 +175,8 @@ export default function AgentListingReviewPage() {
   const [isPublishing, setIsPublishing] = useState(false)
   const [showErrorModal, setShowErrorModal] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [publishedListingTitle, setPublishedListingTitle] = useState('')
 
   // Keyboard support for error modal
   useEffect(() => {
@@ -293,7 +296,7 @@ export default function AgentListingReviewPage() {
         throw new Error(errorData.error || 'Failed to publish listing')
       }
 
-      const result = await response.json()
+      await response.json()
       
       // Clear all upload data after successful publication
       sessionStorage.removeItem('agent:uploadStep1')
@@ -306,13 +309,9 @@ export default function AgentListingReviewPage() {
       // Set flag to indicate successful publishing
       sessionStorage.setItem('agent:published', 'true')
       
-      // Redirect to the edited/created listing page when possible
-      const idToOpen = (editingId || (result && typeof result.id === 'string' ? result.id : '')) as string
-      if (idToOpen) {
-        router.push(`/listings/${encodeURIComponent(idToOpen)}`)
-      } else {
-        router.push('/listings')
-      }
+      // Show success modal instead of redirecting
+      setPublishedListingTitle(draft?.title || 'Your listing')
+      setShowSuccessModal(true)
     } catch (error: any) {
       console.error('Error publishing listing:', error.message)
       // Display error message in modal
@@ -1101,6 +1100,13 @@ export default function AgentListingReviewPage() {
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <ListingSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        listingTitle={publishedListingTitle}
+      />
     </div>
   )
 }
