@@ -553,7 +553,7 @@ export default function ListingsIndexPage() {
 
   return (
     <div className="container space-y-12">
-      <header className="pt-4 text-primary">
+      <header className="pt-18 text-primary">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.25em] text-muted">Marketplace</p>

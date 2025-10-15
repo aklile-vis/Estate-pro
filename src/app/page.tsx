@@ -191,7 +191,7 @@ export default function HomePage() {
   }, [])
 
   return (
-    <div className="space-y-16 pb-20">
+    <div className="space-y-16 pb-20 pt-10">
       <section className="container grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
         <motion.div
           initial={{ opacity: 0, y: 18 }}
