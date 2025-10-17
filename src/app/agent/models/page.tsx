@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ProcessedModel } from '@/lib/database';
+import type { ProcessedModel } from '@/lib/database';
 import { EyeIcon, TrashIcon, DocumentIcon } from '@heroicons/react/24/outline';
 
 export default function ModelsPage() {

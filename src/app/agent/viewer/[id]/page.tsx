@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 
 import DualViewSystem from '@/components/agent/DualViewSystem';
-import { ProcessedModel } from '@/lib/database';
+import type { ProcessedModel } from '@/lib/database';
 import { AgentParameters, FloorPlanElement, RoomDefinition } from '@/services/floorPlanAnalyzer';
 
 export default function ModelViewerPage() {
